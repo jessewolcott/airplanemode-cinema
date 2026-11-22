@@ -117,6 +117,24 @@
   .tracks .n { font: .78rem var(--mono); color: var(--dim); width: 22px; text-align: right; flex: none; }
   .tracks .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tracks .d { font: .75rem var(--mono); color: var(--dim); }
+  /* shows */
+  .showhead { display: grid; grid-template-columns: minmax(0, 340px) 1fr; gap: 22px; align-items: end; padding: 18px 20px 4px; }
+  .showhead .poster { aspect-ratio: 16 / 9; }
+  .showhead h1 { margin: 0 0 4px; font-size: 1.7rem; letter-spacing: -.01em; line-height: 1.15; }
+  .showhead .sub { color: var(--dim); font-size: .9rem; margin-bottom: 14px; }
+  @media (max-width: 600px) { .showhead { grid-template-columns: 1fr; padding: 14px 16px 4px; gap: 14px; } .showhead h1 { font-size: 1.4rem; } }
+  .tabs { display: flex; gap: 6px; padding: 18px 20px 6px; overflow-x: auto; scrollbar-width: none; }
+  .tabs a { flex: none; padding: 7px 14px; border-radius: 99px; border: 1px solid var(--line); text-decoration: none; font-size: .88rem; color: var(--dim); }
+  .tabs a.on { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+  .eps { padding: 6px 20px 30px; display: grid; gap: 4px; }
+  .ep { display: grid; grid-template-columns: 168px 1fr; gap: 14px; align-items: center; padding: 8px; border-radius: 10px; text-decoration: none; }
+  .ep:hover, .ep:focus-visible { background: var(--panel); outline: none; }
+  .ep.now { background: var(--panel); box-shadow: inset 3px 0 0 var(--accent); }
+  .ep .poster { aspect-ratio: 16 / 9; border-radius: 8px; }
+  .ep b { display: block; font-size: .95rem; line-height: 1.3; }
+  .ep small { color: var(--dim); font-size: .8rem; }
+  .ep.cant { opacity: .5; }
+  @media (max-width: 600px) { .ep { grid-template-columns: 128px 1fr; gap: 12px; } .tabs, .eps { padding-left: 16px; padding-right: 16px; } }
   .note { text-align: center; color: var(--dim); font-size: .85rem; padding: 0 20px; }
   @media (max-width: 600px) { .card { width: 200px; } .card.sq { width: 140px; } .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } .top { padding: 14px 16px 4px; } .shelf h2 { margin: 0 16px 8px; } .row, .grid, .chips { padding-left: 16px; padding-right: 16px; } .row { scroll-padding-inline: 16px; } .cta { padding: 0 16px 8px; } .crumbs { padding: 8px 16px 0; } }
 </style>
@@ -177,6 +195,86 @@ function folderPath(fid) { const out = []; let f = folderById.get(fid); while (f
 const folderLabel = fid => folderPath(fid).map(f => f.name).join(" / ");
 function countBelow(fid) { let n = inFolder(fid).length; for (const s of subfolders(fid)) n += countBelow(s.id); return n; }
 
+// ---- TV series: a folder of episodes, or of season folders, is a show ----
+// Episode numbers come from file names (S01E02, 1x02, Episode 2); seasons from folder names
+// ("Season 1", "S2", "Series 3", "Specials" = 0) or, failing that, from the file name.
+const EP_RES = [
+  [/\bS(\d{1,2})[ ._-]*E(\d{1,3})\b/i, m => [+m[1], +m[2]]],
+  [/\b(\d{1,2})x(\d{2,3})\b/i, m => [+m[1], +m[2]]],
+  [/\b(?:episode|ep)[ ._-]*(\d{1,3})\b/i, m => [null, +m[1]]],
+  [/\bE(\d{1,3})\b/, m => [null, +m[1]]],
+];
+function parseEp(name) {
+  const base = name.replace(/\.[a-z0-9]{2,5}$/i, "").replace(/[._]+/g, " ");
+  for (const [re, f] of EP_RES) {
+    const m = re.exec(base);
+    if (m) {
+      const [season, ep] = f(m);
+      const title = base.slice(m.index + m[0].length).replace(/^[\s\-–—:]+/, "").replace(/\s{2,}/g, " ").trim();
+      return { season, ep, title: title || null };
+    }
+  }
+  return null;
+}
+function seasonOf(name) {
+  const n = name.trim();
+  if (/^(specials?|extras?)$/i.test(n)) return 0;
+  const m = /^(?:season|series|staffel|saison|temporada|s)?[ ._-]*(\d{1,2})$/i.exec(n) || /\b(?:season|series)[ ._-]*(\d{1,2})\b/i.exec(n);
+  return m ? +m[1] : null;
+}
+let shows = new Map();      // show folder id -> {id, name, episodes (in watch order), seasons}
+function isShow(f) {
+  const epFiles = inFolder(f.id).filter(m => parseEp(m.name)).length;
+  const seasonKids = subfolders(f.id).filter(k => countBelow(k.id) && (seasonOf(k.name) !== null || inFolder(k.id).some(m => parseEp(m.name))));
+  return seasonKids.length > 0 || epFiles >= 2;
+}
+function buildShows() {
+  shows = new Map();
+  lib.media.forEach(m => { delete m.show; });
+  const walk = fid => {
+    for (const f of subfolders(fid)) {
+      if (isShow(f)) addShow(f); else walk(f.id);       // a show's own subfolders are its seasons
+    }
+  };
+  walk(null);
+}
+function addShow(f) {
+  const eps = [];
+  const collect = (fid, season, idx) => {
+    for (const m of inFolder(fid)) {
+      const e = parseEp(m.name) || {};
+      Object.assign(m, { show: f.id, season: season ?? e.season ?? idx ?? 1, ep: e.ep ?? null, epTitle: e.title ?? null });
+      eps.push(m);
+    }
+    subfolders(fid).forEach((k, i) => collect(k.id, season ?? seasonOf(k.name) ?? (fid === f.id ? null : season), season ?? seasonOf(k.name) ?? i + 1));
+  };
+  collect(f.id, null, null);
+  // seasons in order, specials (0) last; episodes by number, then by name
+  const sk = x => x === 0 ? 999 : x;
+  eps.sort((a, b) => sk(a.season) - sk(b.season) || (a.ep ?? 1e6) - (b.ep ?? 1e6) || nat(a, b));
+  const seasons = [...new Set(eps.map(m => m.season))];
+  shows.set(f.id, { id: f.id, name: f.name, episodes: eps, seasons });
+}
+const seasonName = n => n === 0 ? "Specials" : `Season ${n}`;
+function epShort(m) {   // "E2 · Pilot"
+  if (m.ep == null) return m.epTitle || tidy(m.name);
+  return `E${m.ep}${m.epTitle ? " · " + m.epTitle : ""}`;
+}
+function epLong(m) {    // "S1 · E2 · Pilot"
+  const sh = shows.get(m.show);
+  return (sh && sh.seasons.length > 1 || m.season > 1 ? (m.season === 0 ? "Special · " : `S${m.season} · `) : "") + epShort(m);
+}
+const titleOf = m => m.show ? epLong(m) : tidy(m.name);
+// where this device is in a show: the episode to continue, the next one, or the first
+function showState(sh) {
+  const seen = sh.episodes.map(m => [m, pos(m.id)]).filter(([, p]) => p);
+  if (!seen.length) return { m: sh.episodes.find(playable) || sh.episodes[0], mode: "start", at: 0 };
+  const [last, p] = seen.sort((a, b) => b[1].at - a[1].at)[0];
+  if (!finished(p)) return { m: last, mode: "continue", at: p.at };
+  const next = sh.episodes.slice(sh.episodes.indexOf(last) + 1).find(e => !finished(pos(e.id)));
+  return next ? { m: next, mode: "next", at: p.at } : { m: last, mode: "done", at: p.at };
+}
+
 // ---- library ----
 async function load() {
   try {
@@ -189,27 +287,46 @@ async function load() {
   }
   byId = new Map(lib.media.map(m => [m.id, m]));
   folderById = new Map(lib.folders.map(f => [f.id, f]));
+  buildShows();
   $("#dropLink").href = lib.drop_path;
   route();
   posterQueue();
 }
 
+function posterBox(m, art, extra = "") {
+  const sq = m.kind === "audio";
+  return `<div class="poster" style="background:${gradient(art)}">
+      <div class="ph">${sq ? NOTE : m.poster ? "" : FILM}</div>
+      ${m.poster ? `<img src="api/posters/${m.id}" alt="" loading="lazy" onload="this.classList.add('on')">` : ""}${extra}
+    </div>`;
+}
+const artFor = m => m.show ? shows.get(m.show).name : m.parent ? folderLabel(m.parent) : m.name;
 function card(m, opts = {}) {
   const p = pos(m.id), sq = m.kind === "audio", can = playable(m);
   const dur = (p && p.d) || mem.get("d." + m.id);
   // in a folder's shelf the folder name is already the heading; elsewhere (Continue) say where it's from
-  const where = opts.where ? folderLabel(m.parent) : "";
-  const meta = !can ? "won't play on this device" : [started(p) ? `${clock(p.d - p.t)} left` : finished(p) ? "watched" : "", where].filter(Boolean).join(" · ");
+  const where = opts.where ? (m.show ? epLong(m) : folderLabel(m.parent)) : "";
+  const meta = !can ? "won't play on this device" : [opts.status || (started(p) ? `${clock(p.d - p.t)} left` : finished(p) ? "watched" : ""), where].filter(Boolean).join(" · ");
   return `<a class="card${sq ? " sq" : ""}${can ? "" : " cant"}" href="#play=${m.id}" title="${esc(m.name)}">
-    <div class="poster" style="background:${gradient(m.parent ? folderLabel(m.parent) : m.name)}">
+    <div class="poster" style="background:${gradient(artFor(m))}">
       <div class="ph">${sq ? NOTE : m.poster ? "" : FILM}</div>
       ${m.poster ? `<img src="api/posters/${m.id}" alt="" loading="lazy" onload="this.classList.add('on')">` : ""}
       ${dur && !sq ? `<span class="dur">${clock(dur)}</span>` : ""}
       ${started(p) ? `<div class="prog"><i style="width:${(100 * p.t / p.d).toFixed(1)}%"></i></div>` : ""}
       <div class="hover"><span>${PLAY}</span></div>
     </div>
-    <div class="t">${esc(tidy(m.name))}</div>
+    <div class="t">${esc(opts.title || titleOf(m))}</div>
     ${meta ? `<div class="m">${esc(meta)}</div>` : ""}
+  </a>`;
+}
+function showCard(sh) {
+  const st = showState(sh), m = st.m;
+  const face = m.poster ? m : sh.episodes.find(e => e.poster) || m;
+  const meta = st.mode === "continue" ? `${epLong(m)} · in progress` : st.mode === "next" ? `Next: ${epLong(m)}` : st.mode === "done" ? "watched"
+    : `${sh.seasons.length > 1 ? sh.seasons.filter(x => x).length + " seasons · " : ""}${sh.episodes.length} episode${sh.episodes.length === 1 ? "" : "s"}`;
+  return `<a class="card" href="#show=${sh.id}" title="${esc(sh.name)}">
+    ${posterBox(face, sh.name, `<div class="hover"><span>${PLAY}</span></div>`)}
+    <div class="t">${esc(sh.name)}</div><div class="m">${esc(meta)}</div>
   </a>`;
 }
 
@@ -222,16 +339,25 @@ function renderHome() {
       <p><a class="btn primary" href="${esc(lib.drop_path)}">Open Drop</a></p></div>`;
     return;
   }
-  const cont = lib.media.filter(m => started(pos(m.id))).sort((a, b) => pos(b.id).at - pos(a.id).at).slice(0, 12);
+  // Continue: films/songs in progress, and one card per show (its episode in progress, or the next)
+  const cont = [
+    ...lib.media.filter(m => !m.show && started(pos(m.id))).map(m => ({ at: pos(m.id).at, html: card(m, { where: true }) })),
+    ...[...shows.values()].map(sh => [sh, showState(sh)]).filter(([, st]) => st.mode === "continue" || st.mode === "next")
+      .map(([sh, st]) => ({ at: st.at, html: card(st.m, { title: sh.name, where: true, status: st.mode === "next" ? "Next up" : "" }) })),
+  ].sort((a, b) => b.at - a.at).slice(0, 12);
   let html = "";
-  if (cont.length) html += shelf("Continue", cont, null, "row", { where: true });
-  // one shelf per folder that holds media directly, in folder order; loose files last
+  if (cont.length) html += `<section class="shelf"><h2>Continue<small>${cont.length}</small></h2><div class="row">${cont.map(c => c.html).join("")}</div></section>`;
+  if (shows.size) {
+    const list = [...shows.values()].sort(nat);
+    html += `<section class="shelf"><h2>Shows<small>${list.length}</small></h2><div class="row">${list.map(showCard).join("")}</div></section>`;
+  }
+  // one shelf per (non-show) folder that holds media directly, in folder order; loose files last
   const order = [];
-  const walk = fid => { for (const f of subfolders(fid)) { if (inFolder(f.id).length) order.push(f.id); walk(f.id); } };
+  const walk = fid => { for (const f of subfolders(fid)) { if (shows.has(f.id)) continue; if (inFolder(f.id).length) order.push(f.id); walk(f.id); } };
   walk(null);
   for (const fid of order) html += shelf(folderLabel(fid), inFolder(fid), fid, "row");
   const loose = inFolder(null);
-  if (loose.length) html += shelf(order.length ? "Everything else" : "On Drop", loose, null, "row");
+  if (loose.length) html += shelf(order.length || shows.size ? "Everything else" : "On Drop", loose, null, "row");
   $("#lib").innerHTML = html;
 }
 function shelf(title, list, fid, layout, opts = {}) {
@@ -241,12 +367,13 @@ function shelf(title, list, fid, layout, opts = {}) {
 }
 function renderFolder(fid) {
   const f = folderById.get(fid); if (!f) return go("");
+  if (shows.has(fid)) return go("show=" + fid);
   const parts = folderPath(fid);
   $("#crumbs").hidden = false;
   $("#crumbs").innerHTML = `<a href="#">Library</a>` + parts.map((p, i) => ` / ` + (i === parts.length - 1 ? `<b>${esc(p.name)}</b>` : `<a href="#folder=${p.id}">${esc(p.name)}</a>`)).join("");
   const subs = subfolders(fid).filter(s => countBelow(s.id));
   const list = inFolder(fid);
-  let html = subs.length ? `<div class="chips" style="margin-top:16px">${subs.map(s => `<a class="chip" href="#folder=${s.id}">${esc(s.name)} <small>${countBelow(s.id)}</small></a>`).join("")}</div>` : "";
+  let html = subs.length ? `<div class="chips" style="margin-top:16px">${subs.map(s => `<a class="chip" href="#${shows.has(s.id) ? "show" : "folder"}=${s.id}">${esc(s.name)} <small>${countBelow(s.id)}</small></a>`).join("")}</div>` : "";
   if (list.length) {
     const first = list.find(m => !finished(pos(m.id)) && playable(m)) || list[0];
     html += `<section class="shelf"><h2>${esc(f.name)}<small>${list.length}</small></h2>
@@ -257,14 +384,41 @@ function renderFolder(fid) {
   $("#lib").innerHTML = html;
 }
 
-// ---- routing: #play=<id> (Drop links here), #folder=<id>, or the library ----
+function renderShow(id, wantSeason) {
+  const sh = shows.get(id); if (!sh) return go("");
+  const st = showState(sh);
+  const season = sh.seasons.includes(wantSeason) ? wantSeason : st.m.season;
+  const parts = folderPath(id);
+  $("#crumbs").hidden = false;
+  $("#crumbs").innerHTML = `<a href="#">Library</a>` + parts.slice(0, -1).map(p => ` / <a href="#folder=${p.id}">${esc(p.name)}</a>`).join("") + ` / <b>${esc(sh.name)}</b>`;
+  const face = st.m.poster ? st.m : sh.episodes.find(e => e.poster) || st.m;
+  const label = st.mode === "continue" ? `Continue ${epLong(st.m)}` : st.mode === "next" ? `Play ${epLong(st.m)}` : st.mode === "done" ? "Watch again" : `Play ${epLong(st.m)}`;
+  const target = st.mode === "done" ? sh.episodes[0] : st.m;
+  const n = sh.episodes.length, ns = sh.seasons.filter(x => x).length;
+  let html = `<div class="showhead">${posterBox(face, sh.name)}
+    <div><h1>${esc(sh.name)}</h1><div class="sub">${ns > 1 ? ns + " seasons · " : ""}${n} episode${n === 1 ? "" : "s"}</div>
+    <a class="btn primary" href="#play=${target.id}">${PLAY} ${esc(label)}</a></div></div>`;
+  if (sh.seasons.length > 1) html += `<nav class="tabs">${sh.seasons.map(x => `<a href="#show=${id}&s=${x}" class="${x === season ? "on" : ""}">${seasonName(x)}</a>`).join("")}</nav>`;
+  const list = sh.episodes.filter(m => m.season === season);
+  html += `<div class="eps">${list.map(m => {
+    const p = pos(m.id), dur = (p && p.d) || mem.get("d." + m.id), can = playable(m);
+    const status = !can ? "won't play on this device" : started(p) ? `${clock(p.d - p.t)} left` : finished(p) ? "watched" : dur ? clock(dur) : "";
+    const bar = started(p) ? `<div class="prog"><i style="width:${(100 * p.t / p.d).toFixed(1)}%"></i></div>` : "";
+    return `<a class="ep${m === st.m && st.mode !== "done" ? " now" : ""}${can ? "" : " cant"}" href="#play=${m.id}" title="${esc(m.name)}">
+      ${posterBox(m, sh.name, bar)}<div><b>${esc(epShort(m))}</b><small>${esc(status)}</small></div></a>`;
+  }).join("")}</div>`;
+  $("#lib").innerHTML = html;
+}
+
+// ---- routing: #play=<id> (Drop links here), #folder=<id>, #show=<id>[&s=<season>], or the library ----
 function go(hash) { if (location.hash.slice(1) !== hash) location.hash = hash; else route(); }
 function route() {
   if (!lib) return;
-  const h = location.hash.slice(1), m = /^(play|folder)=([0-9a-f]{16})$/.exec(h);
+  const h = location.hash.slice(1), m = /^(play|folder|show)=([0-9a-f]{16})(?:&s=(\d{1,3}))?$/.exec(h);
   if (m && m[1] === "play") return byId.has(m[2]) ? openPlayer(byId.get(m[2])) : (closePlayer(), renderHome());
   closePlayer();
-  m ? renderFolder(m[2]) : renderHome();
+  if (m && m[1] === "show") renderShow(m[2], m[3] != null ? +m[3] : null);
+  else m ? renderFolder(m[2]) : renderHome();
   window.scrollTo(0, scrollMem[h] || 0);
 }
 const scrollMem = {};
@@ -276,12 +430,14 @@ let media = null, current = null, saveTimer = null, nextTimer = null, idleTimer 
 function openPlayer(m) {
   closePlayer(true);
   current = m;
-  document.title = tidy(m.name) + " · Cinema";
+  const sh = m.show && shows.get(m.show);
+  document.title = (sh ? `${sh.name} · ${epLong(m)}` : tidy(m.name)) + " · Cinema";
   $("#libView").hidden = true;
   $("#player").hidden = false;
-  $("#pTitle").textContent = tidy(m.name);
-  $("#pSub").textContent = folderLabel(m.parent) || "Drop";
-  const list = inFolder(m.parent), idx = list.indexOf(m);
+  $("#pTitle").textContent = sh ? sh.name : tidy(m.name);
+  $("#pSub").textContent = sh ? epLong(m) : folderLabel(m.parent) || "Drop";
+  // a show plays straight on into the next season; otherwise the folder is the playlist
+  const list = sh ? sh.episodes : inFolder(m.parent), idx = list.indexOf(m);
   const stage = $("#stage");
   const noSave = m.download ? "" : ' controlslist="nodownload" oncontextmenu="return false"';
   if (m.kind === "video") {
@@ -290,9 +446,9 @@ function openPlayer(m) {
   } else {
     stage.className = "audio";
     stage.innerHTML = `<div class="art" style="background:${gradient(m.parent ? folderLabel(m.parent) : m.name)}">${NOTE}</div>
-      <h1>${esc(tidy(m.name))}</h1><div class="sub">${esc(folderLabel(m.parent) || "Drop")}${list.length > 1 ? ` · ${idx + 1} of ${list.length}` : ""}</div>
+      <h1>${esc(titleOf(m))}</h1><div class="sub">${esc(sh ? sh.name : folderLabel(m.parent) || "Drop")}${list.length > 1 ? ` · ${idx + 1} of ${list.length}` : ""}</div>
       <audio id="media" controls autoplay preload="auto"${noSave}></audio>
-      ${list.length > 1 ? `<div class="tracks">${list.map((t, i) => `<button type="button" data-track="${t.id}" class="${t === m ? "now" : ""}"><span class="n">${t === m ? "▶" : i + 1}</span><span class="nm">${esc(tidy(t.name))}</span><span class="d">${mem.get("d." + t.id) ? clock(mem.get("d." + t.id)) : ""}</span></button>`).join("")}</div>` : ""}`;
+      ${list.length > 1 ? `<div class="tracks">${list.map((t, i) => `<button type="button" data-track="${t.id}" class="${t === m ? "now" : ""}"><span class="n">${t === m ? "▶" : i + 1}</span><span class="nm">${esc(titleOf(t))}</span><span class="d">${mem.get("d." + t.id) ? clock(mem.get("d." + t.id)) : ""}</span></button>`).join("")}</div>` : ""}`;
     stage.querySelectorAll("[data-track]").forEach(b => b.onclick = () => go("play=" + b.dataset.track));
   }
   if (!playable(m)) stage.insertAdjacentHTML("beforeend", `<p class="note">This device's browser may not play ${esc(m.type)}. Try another device, or a file in MP4 (H.264) or MP3.</p>`);
@@ -313,7 +469,7 @@ function openPlayer(m) {
   saveTimer = setInterval(save, 5000);
   media.play?.().catch(() => {});   // autoplay can be refused (iOS with sound): the controls are there
   if ("mediaSession" in navigator) {
-    navigator.mediaSession.metadata = new MediaMetadata({ title: tidy(m.name), artist: folderLabel(m.parent) || "AirplaneMode", album: "Cinema",
+    navigator.mediaSession.metadata = new MediaMetadata({ title: titleOf(m), artist: sh ? sh.name : folderLabel(m.parent) || "AirplaneMode", album: "Cinema",
       artwork: m.poster ? [{ src: "api/posters/" + m.id, sizes: "480x270", type: "image/jpeg" }] : [] });
     navigator.mediaSession.setActionHandler("nexttrack", list[idx + 1] ? () => go("play=" + list[idx + 1].id) : null);
     navigator.mediaSession.setActionHandler("previoustrack", list[idx - 1] ? () => go("play=" + list[idx - 1].id) : null);
@@ -329,6 +485,7 @@ function closePlayer(keepView) {
   if (!keepView) { $("#player").hidden = true; $("#libView").hidden = false; document.title = "Cinema · AirplaneMode"; }
 }
 $("#back").onclick = () => {
+  if (current && current.show) return go(`show=${current.show}&s=${current.season}`);
   const fid = current && current.parent;
   go(fid ? "folder=" + fid : "");
 };
@@ -349,7 +506,7 @@ function upNext(n) {
   let left = 8;
   const box = document.createElement("div"); box.className = "next";
   box.innerHTML = `<div class="np" style="background-image:${n.poster ? `url(api/posters/${n.id})` : gradient(n.name)}"><div class="ring">${left}</div></div>
-    <div class="nb"><div><small>Up next</small><b>${esc(tidy(n.name))}</b></div><button class="x" type="button">Cancel</button><button class="play" type="button">Play</button></div>`;
+    <div class="nb"><div><small>Up next${n.show && current && n.season !== current.season ? " · " + seasonName(n.season) : ""}</small><b>${esc(titleOf(n))}</b></div><button class="x" type="button">Cancel</button><button class="play" type="button">Play</button></div>`;
   box.querySelector(".play").onclick = () => go("play=" + n.id);
   box.querySelector(".x").onclick = hideNext;
   $("#player").append(box);

@@ -26,6 +26,9 @@ jobs:
           pip install -r requirements.txt httpx==0.28.1   # httpx: for FastAPI TestClient
           python tests/test_cinema.py
 
+      - name: Series logic tests (runs the page's own code under Node)
+        run: node tests/test_series.mjs
+
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
 

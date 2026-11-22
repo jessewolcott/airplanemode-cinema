@@ -12,6 +12,7 @@ is Drop's (`../airplanemode-drop`), so changes to Drop's item format affect this
 ```powershell
 docker compose up -d --build         # standalone dev: Cinema :8768 + Drop :8766 (no posters: cross-origin)
 python tests/test_cinema.py          # API tests (CI runs these before building)
+node tests/test_series.mjs           # series logic (episode parsing, shows, watch order), from the page's code
 ```
 
 The real test bed is the platform dev stack (`../airplanemode`, compose.dev.yaml builds this
@@ -27,6 +28,11 @@ repo): same origin, so posters work and Drop's "Play in Cinema" appears.
 - Honour Drop's `download: false`: `controlslist="nodownload"`, no context menu. It's a
   courtesy, not protection; streaming always works.
 - Resume positions are per device (localStorage `cinema.p.<id>`). No accounts.
+- **TV series** live in the page (`parseEp`, `seasonOf`, `isShow`, `buildShows`, `showState`),
+  between `const nat =` and `// ---- library ----`: `tests/test_series.mjs` runs exactly that
+  slice under Node, so keep it free of DOM work at load time. A show's subfolders are seasons,
+  never shelves; `#show=<id>[&s=<n>]` is its page; the player's playlist is the show's whole
+  episode list. Add a case to the test for any new file-name pattern.
 
 ## Releasing
 
