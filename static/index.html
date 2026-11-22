@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0b0b0d">
+<title>Cinema · AirplaneMode</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23e2685c'/%3E%3Cpath d='M6 4.5v7l5.5-3.5z' fill='%231c0c0a'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0b0b0d; --panel: #151519; --panel2: #1c1c22; --line: #26262e; --line2: #34343e;
+    --ink: #ece7dc; --dim: #8e8a84; --accent: #e2685c; --accent2: #f08a7e; --amber: #f2b34b;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; }
+  a { color: inherit; }
+  [hidden] { display: none !important; }
+
+  /* ---------- library ---------- */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px 6px; max-width: 1400px; margin: 0 auto; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.35rem; letter-spacing: -.01em; text-decoration: none; }
+  .brand .mark { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
+  .brand .mark svg { width: 12px; height: 12px; margin-left: 2px; }
+  .top nav { display: flex; gap: 8px; }
+  .pillbtn { font: .8rem var(--mono); color: var(--dim); text-decoration: none; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: none; cursor: pointer; }
+  .pillbtn:hover { color: var(--ink); border-color: var(--dim); }
+  .lib { max-width: 1400px; margin: 0 auto; padding: 8px 0 60px; }
+  .crumbs { padding: 8px 20px 0; font: .78rem var(--mono); color: var(--dim); display: flex; gap: 6px; flex-wrap: wrap; }
+  .crumbs a { color: var(--dim); text-decoration: none; } .crumbs a:hover { color: var(--ink); }
+  .crumbs b { color: var(--ink); font-weight: 600; }
+  .shelf { margin-top: 22px; }
+  .shelf h2 { display: flex; align-items: baseline; gap: 10px; margin: 0 20px 10px; font-size: 1.12rem; letter-spacing: -.005em; }
+  .shelf h2 a { text-decoration: none; }
+  .shelf h2 a:hover { color: var(--accent2); }
+  .shelf h2 small { color: var(--dim); font: .74rem var(--mono); font-weight: 400; }
+  .row { display: flex; gap: 12px; overflow-x: auto; padding: 4px 20px 14px; scroll-snap-type: x proximity; scroll-padding-inline: 20px; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px 12px; padding: 4px 20px 14px; }
+  .grid.audio { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 20px; }
+  .chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 99px; background: var(--panel); border: 1px solid var(--line); text-decoration: none; font-size: .9rem; }
+  .chip:hover { border-color: var(--line2); }
+  .chip small { color: var(--dim); font: .72rem var(--mono); }
+
+  .card { flex: none; width: 260px; scroll-snap-align: start; text-decoration: none; display: block; border-radius: 10px; outline: none; }
+  .grid .card { width: auto; }
+  .card.sq { width: 170px; }
+  .grid .card.sq { width: auto; }
+  .poster { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: var(--panel2); border: 1px solid var(--line); transition: transform .18s, border-color .18s, box-shadow .18s; }
+  .card.sq .poster { aspect-ratio: 1; }
+  .card:hover .poster, .card:focus-visible .poster { transform: translateY(-2px) scale(1.015); border-color: var(--accent); box-shadow: 0 14px 30px -14px #000; }
+  .poster img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .3s; }
+  .poster img.on { opacity: 1; }
+  .poster .ph { position: absolute; inset: 0; display: grid; place-items: center; padding: 14px; text-align: center; font-weight: 700; font-size: 1.05rem; line-height: 1.2; color: #fff9; }
+  .poster .ph svg { width: 34%; height: 34%; opacity: .55; }
+  .poster .dur { position: absolute; right: 7px; bottom: 9px; font: .7rem var(--mono); background: #000b; padding: 1px 6px; border-radius: 4px; }
+  .poster .prog { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: #fff2; }
+  .poster .prog i { display: block; height: 100%; background: var(--accent); }
+  .poster .hover { position: absolute; inset: 0; display: grid; place-items: center; background: #0006; opacity: 0; transition: opacity .18s; }
+  .card:hover .hover, .card:focus-visible .hover { opacity: 1; }
+  .hover span { width: 48px; height: 48px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; box-shadow: 0 6px 20px #0008; }
+  .hover svg { width: 16px; height: 16px; margin-left: 3px; }
+  .card .t { margin-top: 8px; font-weight: 600; font-size: .93rem; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .card .m { color: var(--dim); font-size: .78rem; margin-top: 2px; }
+  .card.cant { opacity: .5; }
+
+  .empty { max-width: 560px; margin: 70px auto; padding: 0 20px; text-align: center; color: var(--dim); }
+  .empty .big { width: 72px; height: 72px; margin: 0 auto 18px; border-radius: 20px; background: var(--panel2); display: grid; place-items: center; }
+  .empty .big svg { width: 26px; height: 26px; margin-left: 4px; }
+  .empty h2 { color: var(--ink); margin: 0 0 8px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; font: 600 .95rem var(--sans); padding: 10px 16px; border-radius: 9px; border: 1px solid transparent; cursor: pointer; text-decoration: none; }
+  .btn.primary { background: var(--accent); color: #1c0c0a; }
+  .btn svg { width: 11px; height: 12px; flex: none; }
+  .cta { padding: 0 20px 8px; }
+  .btn.ghost { border-color: var(--line2); background: transparent; }
+
+  /* ---------- player ---------- */
+  .player { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; z-index: 5; }
+  .pbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top)); background: linear-gradient(#000d, #0000); position: absolute; top: 0; left: 0; right: 0; z-index: 2; transition: opacity .3s; }
+  .player.idle .pbar { opacity: 0; pointer-events: none; }
+  .back { width: 40px; height: 40px; border-radius: 50%; border: 0; background: #ffffff1a; cursor: pointer; display: grid; place-items: center; flex: none; }
+  .back:hover { background: #ffffff33; }
+  .back svg { width: 18px; height: 18px; }
+  .ptitle { min-width: 0; }
+  .ptitle b { display: block; font-size: 1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ptitle small { color: #fffa; font-size: .8rem; }
+  .stage { flex: 1; display: grid; place-items: center; min-height: 0; }
+  .stage video { width: 100%; height: 100%; max-height: 100vh; background: #000; }
+  .toast { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); background: #1c1c22ee; border: 1px solid var(--line2); border-radius: 99px; padding: 8px 8px 8px 16px; display: flex; gap: 10px; align-items: center; font-size: .9rem; z-index: 3; white-space: nowrap; box-shadow: 0 10px 30px #000a; }
+  .toast button { border: 0; border-radius: 99px; padding: 6px 12px; background: var(--accent); color: #1c0c0a; font-weight: 600; cursor: pointer; }
+  .toast button.ghost { background: #ffffff1a; color: var(--ink); }
+  .next { position: absolute; right: 20px; bottom: 90px; width: min(340px, calc(100vw - 40px)); background: #151519f2; border: 1px solid var(--line2); border-radius: 12px; overflow: hidden; z-index: 3; box-shadow: 0 16px 40px #000c; }
+  .next .np { aspect-ratio: 16 / 9; background: var(--panel2) center / cover; position: relative; }
+  .next .np .ring { position: absolute; inset: 0; display: grid; place-items: center; background: #0007; font: 700 1.6rem var(--mono); }
+  .next .nb { padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .next .nb div { min-width: 0; } .next .nb small { color: var(--dim); font-size: .75rem; display: block; }
+  .next .nb b { display: block; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .next .nb button { border: 0; border-radius: 7px; padding: 7px 12px; cursor: pointer; font-weight: 600; flex: none; }
+  .next .play { background: var(--accent); color: #1c0c0a; }
+  .next .x { background: #ffffff1a; }
+
+  /* audio */
+  .audio { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 18px; overflow: auto; padding: 76px 20px 30px; max-width: 760px; width: 100%; margin: 0 auto; }
+  .art { width: min(300px, 70vw); aspect-ratio: 1; margin: 0 auto; border-radius: 18px; display: grid; place-items: center; box-shadow: 0 30px 60px -20px #000; }
+  .art svg { width: 30%; height: 30%; opacity: .8; }
+  .audio h1 { text-align: center; margin: 0; font-size: 1.35rem; line-height: 1.25; }
+  .audio .sub { text-align: center; color: var(--dim); margin-top: -12px; font-size: .9rem; }
+  .audio audio { width: 100%; }
+  .tracks { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .tracks button { display: flex; width: 100%; gap: 12px; align-items: center; text-align: left; padding: 10px 14px; border: 0; border-bottom: 1px solid var(--line); background: none; cursor: pointer; }
+  .tracks button:last-child { border-bottom: 0; }
+  .tracks button:hover { background: var(--panel2); }
+  .tracks button.now { color: var(--accent2); }
+  .tracks .n { font: .78rem var(--mono); color: var(--dim); width: 22px; text-align: right; flex: none; }
+  .tracks .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tracks .d { font: .75rem var(--mono); color: var(--dim); }
+  .note { text-align: center; color: var(--dim); font-size: .85rem; padding: 0 20px; }
+  @media (max-width: 600px) { .card { width: 200px; } .card.sq { width: 140px; } .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } .top { padding: 14px 16px 4px; } .shelf h2 { margin: 0 16px 8px; } .row, .grid, .chips { padding-left: 16px; padding-right: 16px; } .row { scroll-padding-inline: 16px; } .cta { padding: 0 16px 8px; } .crumbs { padding: 8px 16px 0; } }
+</style>
+</head>
+<body>
+
+<div id="libView">
+  <header class="top">
+    <a class="brand" href="#"><span class="mark"><svg viewBox="0 0 12 14"><path d="M1 1l10 6-10 6z" fill="#1c0c0a"/></svg></span>Cinema</a>
+    <nav><a class="pillbtn" id="dropLink" href="../drop/">add in Drop</a><a class="pillbtn" href="../">AirplaneMode</a></nav>
+  </header>
+  <div class="crumbs" id="crumbs" hidden></div>
+  <main class="lib" id="lib"><p class="empty">Loading the library…</p></main>
+</div>
+
+<div class="player" id="player" hidden>
+  <div class="pbar">
+    <button class="back" id="back" type="button" aria-label="Back to the library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+    <div class="ptitle"><b id="pTitle"></b><small id="pSub"></small></div>
+  </div>
+  <div class="stage" id="stage"></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const PLAY = '<svg viewBox="0 0 12 14"><path d="M1 1l10 6-10 6z" fill="#1c0c0a"/></svg>';
+const NOTE = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+const FILM = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></svg>';
+const nat = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+let lib = null, byId = new Map(), folderById = new Map();
+
+// ---- per-device memory: where you are in each file, and durations we've seen ----
+const mem = {
+  get(k, d = null) { try { const v = localStorage.getItem("cinema." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("cinema." + k, JSON.stringify(v)); } catch {} },
+};
+const pos = id => mem.get("p." + id);          // {t, d, at}
+const savePos = (id, t, d) => { if (d > 0) mem.set("p." + id, { t, d, at: Date.now() }); };
+const finished = p => p && p.d && (p.t / p.d > 0.95 || p.d - p.t < 25);
+const started = p => p && p.t > 15 && !finished(p);
+
+function tidy(name) {
+  return name.replace(/\.[a-z0-9]{2,5}$/i, "").replace(/[._]+/g, " ").replace(/\s{2,}/g, " ").trim() || name;
+}
+function clock(s) {
+  s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(x).padStart(2, "0")}` : `${m}:${String(x).padStart(2, "0")}`;
+}
+function hue(str) { let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+const gradient = s => `linear-gradient(135deg, hsl(${hue(s)} 35% 26%), hsl(${(hue(s) + 40) % 360} 40% 14%))`;
+function playable(m) { try { return document.createElement(m.kind).canPlayType(m.type) !== ""; } catch { return false; } }
+const src = m => lib.drop_path + "api/files/" + m.id;
+const inFolder = fid => lib.media.filter(m => (m.parent || null) === fid).sort(nat);
+const subfolders = fid => lib.folders.filter(f => (f.parent || null) === fid).sort(nat);
+function folderPath(fid) { const out = []; let f = folderById.get(fid); while (f && out.length < 12) { out.unshift(f); f = folderById.get(f.parent); } return out; }
+const folderLabel = fid => folderPath(fid).map(f => f.name).join(" / ");
+function countBelow(fid) { let n = inFolder(fid).length; for (const s of subfolders(fid)) n += countBelow(s.id); return n; }
+
+// ---- library ----
+async function load() {
+  try {
+    const r = await fetch("api/library", { cache: "no-store" });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    lib = await r.json();
+  } catch (e) {
+    $("#lib").innerHTML = `<div class="empty"><div class="big">${PLAY}</div><h2>The library isn't reachable</h2><p>${esc(e.message)}</p><button class="btn ghost" onclick="load()">Try again</button></div>`;
+    return;
+  }
+  byId = new Map(lib.media.map(m => [m.id, m]));
+  folderById = new Map(lib.folders.map(f => [f.id, f]));
+  $("#dropLink").href = lib.drop_path;
+  route();
+  posterQueue();
+}
+
+function card(m, opts = {}) {
+  const p = pos(m.id), sq = m.kind === "audio", can = playable(m);
+  const dur = (p && p.d) || mem.get("d." + m.id);
+  // in a folder's shelf the folder name is already the heading; elsewhere (Continue) say where it's from
+  const where = opts.where ? folderLabel(m.parent) : "";
+  const meta = !can ? "won't play on this device" : [started(p) ? `${clock(p.d - p.t)} left` : finished(p) ? "watched" : "", where].filter(Boolean).join(" · ");
+  return `<a class="card${sq ? " sq" : ""}${can ? "" : " cant"}" href="#play=${m.id}" title="${esc(m.name)}">
+    <div class="poster" style="background:${gradient(m.parent ? folderLabel(m.parent) : m.name)}">
+      <div class="ph">${sq ? NOTE : m.poster ? "" : FILM}</div>
+      ${m.poster ? `<img src="api/posters/${m.id}" alt="" loading="lazy" onload="this.classList.add('on')">` : ""}
+      ${dur && !sq ? `<span class="dur">${clock(dur)}</span>` : ""}
+      ${started(p) ? `<div class="prog"><i style="width:${(100 * p.t / p.d).toFixed(1)}%"></i></div>` : ""}
+      <div class="hover"><span>${PLAY}</span></div>
+    </div>
+    <div class="t">${esc(tidy(m.name))}</div>
+    ${meta ? `<div class="m">${esc(meta)}</div>` : ""}
+  </a>`;
+}
+
+function renderHome() {
+  $("#crumbs").hidden = true;
+  if (!lib.media.length) {
+    $("#lib").innerHTML = `<div class="empty"><div class="big" style="background:var(--accent)">${PLAY}</div>
+      <h2>Nothing to watch yet</h2>
+      <p>Cinema plays the videos and music on Drop. Load films, shows or albums into Drop before the trip (folders become shelves here), and tap <b>keep</b> so they stay.</p>
+      <p><a class="btn primary" href="${esc(lib.drop_path)}">Open Drop</a></p></div>`;
+    return;
+  }
+  const cont = lib.media.filter(m => started(pos(m.id))).sort((a, b) => pos(b.id).at - pos(a.id).at).slice(0, 12);
+  let html = "";
+  if (cont.length) html += shelf("Continue", cont, null, "row", { where: true });
+  // one shelf per folder that holds media directly, in folder order; loose files last
+  const order = [];
+  const walk = fid => { for (const f of subfolders(fid)) { if (inFolder(f.id).length) order.push(f.id); walk(f.id); } };
+  walk(null);
+  for (const fid of order) html += shelf(folderLabel(fid), inFolder(fid), fid, "row");
+  const loose = inFolder(null);
+  if (loose.length) html += shelf(order.length ? "Everything else" : "On Drop", loose, null, "row");
+  $("#lib").innerHTML = html;
+}
+function shelf(title, list, fid, layout, opts = {}) {
+  const audio = list.every(m => m.kind === "audio");
+  return `<section class="shelf"><h2>${fid ? `<a href="#folder=${fid}">${esc(title)} ›</a>` : esc(title)}<small>${list.length}</small></h2>
+    <div class="${layout}${layout === "grid" && audio ? " audio" : ""}">${list.map(m => card(m, opts)).join("")}</div></section>`;
+}
+function renderFolder(fid) {
+  const f = folderById.get(fid); if (!f) return go("");
+  const parts = folderPath(fid);
+  $("#crumbs").hidden = false;
+  $("#crumbs").innerHTML = `<a href="#">Library</a>` + parts.map((p, i) => ` / ` + (i === parts.length - 1 ? `<b>${esc(p.name)}</b>` : `<a href="#folder=${p.id}">${esc(p.name)}</a>`)).join("");
+  const subs = subfolders(fid).filter(s => countBelow(s.id));
+  const list = inFolder(fid);
+  let html = subs.length ? `<div class="chips" style="margin-top:16px">${subs.map(s => `<a class="chip" href="#folder=${s.id}">${esc(s.name)} <small>${countBelow(s.id)}</small></a>`).join("")}</div>` : "";
+  if (list.length) {
+    const first = list.find(m => !finished(pos(m.id)) && playable(m)) || list[0];
+    html += `<section class="shelf"><h2>${esc(f.name)}<small>${list.length}</small></h2>
+      <div class="cta"><a class="btn primary" href="#play=${first.id}">${PLAY} ${started(pos(first.id)) ? "Continue" : "Play"} ${esc(tidy(first.name))}</a></div>
+      <div class="grid${list.every(m => m.kind === "audio") ? " audio" : ""}">${list.map(m => card(m)).join("")}</div></section>`;
+  }
+  if (!subs.length && !list.length) html += `<div class="empty"><p>Nothing playable in this folder.</p></div>`;
+  $("#lib").innerHTML = html;
+}
+
+// ---- routing: #play=<id> (Drop links here), #folder=<id>, or the library ----
+function go(hash) { if (location.hash.slice(1) !== hash) location.hash = hash; else route(); }
+function route() {
+  if (!lib) return;
+  const h = location.hash.slice(1), m = /^(play|folder)=([0-9a-f]{16})$/.exec(h);
+  if (m && m[1] === "play") return byId.has(m[2]) ? openPlayer(byId.get(m[2])) : (closePlayer(), renderHome());
+  closePlayer();
+  m ? renderFolder(m[2]) : renderHome();
+  window.scrollTo(0, scrollMem[h] || 0);
+}
+const scrollMem = {};
+window.addEventListener("hashchange", route);
+window.addEventListener("scroll", () => { if ($("#player").hidden) scrollMem[location.hash.slice(1)] = window.scrollY; }, { passive: true });
+
+// ---- player ----
+let media = null, current = null, saveTimer = null, nextTimer = null, idleTimer = null;
+function openPlayer(m) {
+  closePlayer(true);
+  current = m;
+  document.title = tidy(m.name) + " · Cinema";
+  $("#libView").hidden = true;
+  $("#player").hidden = false;
+  $("#pTitle").textContent = tidy(m.name);
+  $("#pSub").textContent = folderLabel(m.parent) || "Drop";
+  const list = inFolder(m.parent), idx = list.indexOf(m);
+  const stage = $("#stage");
+  const noSave = m.download ? "" : ' controlslist="nodownload" oncontextmenu="return false"';
+  if (m.kind === "video") {
+    stage.className = "stage";
+    stage.innerHTML = `<video id="media" controls autoplay playsinline preload="auto"${noSave}></video>`;
+  } else {
+    stage.className = "audio";
+    stage.innerHTML = `<div class="art" style="background:${gradient(m.parent ? folderLabel(m.parent) : m.name)}">${NOTE}</div>
+      <h1>${esc(tidy(m.name))}</h1><div class="sub">${esc(folderLabel(m.parent) || "Drop")}${list.length > 1 ? ` · ${idx + 1} of ${list.length}` : ""}</div>
+      <audio id="media" controls autoplay preload="auto"${noSave}></audio>
+      ${list.length > 1 ? `<div class="tracks">${list.map((t, i) => `<button type="button" data-track="${t.id}" class="${t === m ? "now" : ""}"><span class="n">${t === m ? "▶" : i + 1}</span><span class="nm">${esc(tidy(t.name))}</span><span class="d">${mem.get("d." + t.id) ? clock(mem.get("d." + t.id)) : ""}</span></button>`).join("")}</div>` : ""}`;
+    stage.querySelectorAll("[data-track]").forEach(b => b.onclick = () => go("play=" + b.dataset.track));
+  }
+  if (!playable(m)) stage.insertAdjacentHTML("beforeend", `<p class="note">This device's browser may not play ${esc(m.type)}. Try another device, or a file in MP4 (H.264) or MP3.</p>`);
+  media = $("#media");
+  media.src = src(m);
+  const p = pos(m.id);
+  media.addEventListener("loadedmetadata", () => {
+    mem.set("d." + m.id, media.duration);
+    if (started(p)) {
+      media.currentTime = p.t;
+      toast(`Picked up at ${clock(p.t)}`, "Start over", () => { media.currentTime = 0; });
+    }
+  }, { once: true });
+  media.addEventListener("pause", () => { save(); armIdle(); });
+  media.addEventListener("ended", () => { save(); upNext(list[idx + 1]); });
+  media.addEventListener("play", () => { hideNext(); armIdle(); });
+  media.addEventListener("error", () => toast("This file won't play here.", "Back", () => history.length > 1 ? history.back() : go("")));
+  saveTimer = setInterval(save, 5000);
+  media.play?.().catch(() => {});   // autoplay can be refused (iOS with sound): the controls are there
+  if ("mediaSession" in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({ title: tidy(m.name), artist: folderLabel(m.parent) || "AirplaneMode", album: "Cinema",
+      artwork: m.poster ? [{ src: "api/posters/" + m.id, sizes: "480x270", type: "image/jpeg" }] : [] });
+    navigator.mediaSession.setActionHandler("nexttrack", list[idx + 1] ? () => go("play=" + list[idx + 1].id) : null);
+    navigator.mediaSession.setActionHandler("previoustrack", list[idx - 1] ? () => go("play=" + list[idx - 1].id) : null);
+  }
+  armIdle();
+}
+function save() { if (media && current && media.duration) savePos(current.id, media.currentTime, media.duration); }
+function closePlayer(keepView) {
+  if (media) { save(); media.pause(); media.removeAttribute("src"); media.load(); }
+  clearInterval(saveTimer); clearTimeout(nextTimer); clearTimeout(idleTimer);
+  media = current = null;
+  $("#stage").innerHTML = "";
+  if (!keepView) { $("#player").hidden = true; $("#libView").hidden = false; document.title = "Cinema · AirplaneMode"; }
+}
+$("#back").onclick = () => {
+  const fid = current && current.parent;
+  go(fid ? "folder=" + fid : "");
+};
+window.addEventListener("pagehide", save);
+document.addEventListener("visibilitychange", () => { if (document.hidden) save(); });
+
+function toast(text, label, fn) {
+  $(".toast")?.remove();
+  const t = document.createElement("div"); t.className = "toast";
+  t.innerHTML = `<span>${esc(text)}</span><button type="button">${esc(label)}</button>`;
+  t.querySelector("button").onclick = () => { fn(); t.remove(); };
+  $("#player").append(t);
+  setTimeout(() => t.remove(), 7000);
+}
+function upNext(n) {
+  if (!n || !playable(n)) return;
+  if (n.kind === "audio") return go("play=" + n.id);      // albums just keep going
+  let left = 8;
+  const box = document.createElement("div"); box.className = "next";
+  box.innerHTML = `<div class="np" style="background-image:${n.poster ? `url(api/posters/${n.id})` : gradient(n.name)}"><div class="ring">${left}</div></div>
+    <div class="nb"><div><small>Up next</small><b>${esc(tidy(n.name))}</b></div><button class="x" type="button">Cancel</button><button class="play" type="button">Play</button></div>`;
+  box.querySelector(".play").onclick = () => go("play=" + n.id);
+  box.querySelector(".x").onclick = hideNext;
+  $("#player").append(box);
+  const tick = () => { left--; const r = box.querySelector(".ring"); if (r) r.textContent = left; if (left <= 0) go("play=" + n.id); else nextTimer = setTimeout(tick, 1000); };
+  nextTimer = setTimeout(tick, 1000);
+}
+function hideNext() { clearTimeout(nextTimer); $(".next")?.remove(); }
+function armIdle() {
+  $("#player").classList.remove("idle"); clearTimeout(idleTimer);
+  if (current && current.kind === "video") idleTimer = setTimeout(() => { if (media && !media.paused) $("#player").classList.add("idle"); }, 2500);
+}
+["mousemove", "touchstart", "keydown"].forEach(t => $("#player").addEventListener(t, armIdle, { passive: true }));
+document.addEventListener("keydown", e => {
+  if (!media || e.target.closest("input, textarea")) return;
+  const k = e.key;
+  if (k === " " || k === "k") { e.preventDefault(); media.paused ? media.play() : media.pause(); }
+  else if (k === "ArrowRight" || k === "l") { media.currentTime = Math.min(media.duration || 0, media.currentTime + 10); }
+  else if (k === "ArrowLeft" || k === "j") { media.currentTime = Math.max(0, media.currentTime - 10); }
+  else if (k === "f" && media.requestFullscreen) { document.fullscreenElement ? document.exitFullscreen() : media.requestFullscreen(); }
+  else if (k === "m") { media.muted = !media.muted; }
+  else if (k === "Escape" && !document.fullscreenElement) { $("#back").click(); }
+});
+
+// ---- posters: the first browser to see a video grabs a frame and gives it to the box ----
+let postering = false;
+async function posterQueue() {
+  if (postering || !lib) return; postering = true;
+  try {
+    for (const m of lib.media) {
+      if (m.poster || m.kind !== "video" || !playable(m) || mem.get("nop." + m.id)) continue;
+      while (!$("#player").hidden) await new Promise(r => setTimeout(r, 3000));   // never compete with playback
+      const blob = await grab(m).catch(() => null);
+      if (!blob) { mem.set("nop." + m.id, 1); continue; }
+      const r = await fetch("api/posters/" + m.id, { method: "PUT", headers: { "X-Cinema": "1", "Content-Type": blob.type }, body: blob }).catch(() => null);
+      if (r && r.ok) {
+        m.poster = true;
+        document.querySelectorAll(`a.card[href="#play=${m.id}"] .poster`).forEach(p => {
+          p.querySelector(".ph").innerHTML = "";
+          p.insertAdjacentHTML("afterbegin", `<img src="api/posters/${m.id}?v=1" alt="" onload="this.classList.add('on')">`);
+        });
+      }
+    }
+  } finally { postering = false; }
+}
+function grab(m) {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement("video");
+    v.muted = true; v.playsInline = true; v.preload = "metadata"; v.crossOrigin = "anonymous";
+    const fail = () => { cleanup(); reject(); };
+    const timer = setTimeout(fail, 20000);
+    const cleanup = () => { clearTimeout(timer); v.removeAttribute("src"); v.load(); };
+    v.onerror = fail;
+    v.onloadedmetadata = () => { mem.set("d." + m.id, v.duration); v.currentTime = Math.min(Math.max(v.duration * 0.12, 1), 300); };
+    v.onseeked = () => {
+      try {
+        const w = 480, h = Math.round(w * 9 / 16), c = document.createElement("canvas"); c.width = w; c.height = h;
+        const ctx = c.getContext("2d"), r = v.videoWidth / v.videoHeight || 16 / 9;
+        let sw = v.videoWidth, sh = v.videoHeight, sx = 0, sy = 0;     // cover-crop to 16:9
+        if (r > 16 / 9) { sw = sh * 16 / 9; sx = (v.videoWidth - sw) / 2; } else { sh = sw * 9 / 16; sy = (v.videoHeight - sh) / 2; }
+        ctx.drawImage(v, sx, sy, sw, sh, 0, 0, w, h);
+        c.toBlob(b => { cleanup(); b ? resolve(b) : reject(); }, "image/jpeg", 0.74);
+      } catch { fail(); }      // e.g. a cross-origin Drop in standalone dev: no posters, no harm
+    };
+    v.src = src(m);
+  });
+}
+
+load();
+setInterval(() => { if ($("#player").hidden) load(); }, 30000);   // pick up new files on Drop
+</script>
+</body>
+</html>

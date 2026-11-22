@@ -1,0 +1,31 @@
+# Standalone development: Cinema plus Drop (built from ../airplanemode-drop).
+#   docker compose up -d --build      ->  Cinema http://localhost:8768, Drop http://localhost:8766
+# Here they're on different ports, so posters can't be grabbed (the browser treats Drop as
+# another site); everything else works. In the platform's dev stack both share one address.
+# On the box, Cinema runs from the airplanemode platform repo at /cinema/.
+
+name: cinema-dev
+
+services:
+  cinema:
+    build: .
+    environment:
+      DROP_URL: http://drop:8000
+      DROP_PATH: http://localhost:${DROP_PORT:-8766}/
+    volumes:
+      - cinema-data:/data
+    ports:
+      - "${PORT:-8768}:8000"
+    mem_limit: 64m
+
+  drop:
+    build: ../airplanemode-drop
+    volumes:
+      - drop-data:/data
+    ports:
+      - "${DROP_PORT:-8766}:8000"
+    mem_limit: 128m
+
+volumes:
+  cinema-data:
+  drop-data:

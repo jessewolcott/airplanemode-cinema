@@ -1,0 +1,19 @@
+# AirplaneMode app manifest. See the platform repo: docs/app-contract.md
+id: cinema
+name: Cinema
+description: Watch the films and shows, and play the music, loaded onto Drop, on every device, each picking up where it left off.
+image: ghcr.io/jessewolcott/airplanemode-cinema
+port: 8000
+path: /cinema/
+memory: 64m           # media streams from Drop straight to the browser; Cinema never touches it
+volume: /data         # posters only (small JPEGs)
+needs:
+  llm: none
+  apps: [drop]        # its library is Drop's files
+opens:                # Drop offers "Play in Cinema" for these types (via the platform's apps.json)
+  from: drop
+  types: ["video/*", "audio/*"]
+  url: /cinema/#play={id}
+env:
+  DROP_URL: Drop's API inside the stack (default http://drop:8000).
+  DROP_PATH: Where the browser streams from (default ../drop/, i.e. /drop/ on the box).
