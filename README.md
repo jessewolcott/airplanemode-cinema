@@ -1,8 +1,20 @@
+<p align="center"><img src="docs/icon.svg" width="96" alt="Cinema icon"></p>
+
 # Cinema: watch what's on Drop, on every device
 
 An [AirplaneMode](https://github.com/jessewolcott/airplanemode) app. Cinema plays the videos and
 music loaded onto [Drop](https://github.com/jessewolcott/airplanemode-drop), on every phone,
 tablet and laptop on the hotspot, with no internet.
+
+<p align="center">
+  <img src="docs/screenshots/library.png" width="230" alt="The library: Continue, and a shelf per Drop folder">
+  <img src="docs/screenshots/folder.png" width="230" alt="A folder: continue where this device left off">
+</p>
+<p align="center">
+  <img src="docs/screenshots/player.png" width="700" alt="The player at the end of an episode, with up next">
+</p>
+
+<sub>Screenshots from the laptop dev stack; not yet tested on real hardware.</sub>
 
 - **A library from Drop's folders.** Each folder with videos or music becomes a shelf ("Ocean
   Trip", "Kids", "Music"); files sort naturally, so episodes play in order.

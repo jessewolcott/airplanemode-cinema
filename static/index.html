@@ -25,8 +25,8 @@
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.35rem; letter-spacing: -.01em; text-decoration: none; }
   .brand .mark { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
   .brand .mark svg { width: 12px; height: 12px; margin-left: 2px; }
-  .top nav { display: flex; gap: 8px; }
-  .pillbtn { font: .8rem var(--mono); color: var(--dim); text-decoration: none; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: none; cursor: pointer; }
+  .top nav { display: flex; gap: 8px; flex: none; }
+  .pillbtn { white-space: nowrap; font: .8rem var(--mono); color: var(--dim); text-decoration: none; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: none; cursor: pointer; }
   .pillbtn:hover { color: var(--ink); border-color: var(--dim); }
   .lib { max-width: 1400px; margin: 0 auto; padding: 8px 0 60px; }
   .crumbs { padding: 8px 20px 0; font: .78rem var(--mono); color: var(--dim); display: flex; gap: 6px; flex-wrap: wrap; }
@@ -156,8 +156,9 @@ const mem = {
 };
 const pos = id => mem.get("p." + id);          // {t, d, at}
 const savePos = (id, t, d) => { if (d > 0) mem.set("p." + id, { t, d, at: Date.now() }); };
-const finished = p => p && p.d && (p.t / p.d > 0.95 || p.d - p.t < 25);
-const started = p => p && p.t > 15 && !finished(p);
+// the last 25 s of a film are credits; a short clip isn't finished until it nearly is
+const finished = p => p && p.d && (p.t / p.d > 0.95 || (p.d > 300 && p.d - p.t < 25));
+const started = p => p && p.d && p.t > Math.min(15, p.d * 0.1) && !finished(p);
 
 function tidy(name) {
   return name.replace(/\.[a-z0-9]{2,5}$/i, "").replace(/[._]+/g, " ").replace(/\s{2,}/g, " ").trim() || name;
