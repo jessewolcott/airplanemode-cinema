@@ -22,12 +22,20 @@
 
   /* ---------- library ---------- */
   .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px 6px; max-width: 1400px; margin: 0 auto; }
+  .top { padding-top: max(18px, env(safe-area-inset-top)); padding-right: max(20px, env(safe-area-inset-right)); padding-left: max(20px, env(safe-area-inset-left)); }
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.35rem; letter-spacing: -.01em; text-decoration: none; }
   .brand .mark { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
   .brand .mark svg { width: 12px; height: 12px; margin-left: 2px; }
-  .top nav { display: flex; gap: 8px; flex: none; }
+  .top nav { display: flex; align-items: center; gap: 8px; flex: none; }
   .pillbtn { white-space: nowrap; font: .8rem var(--mono); color: var(--dim); text-decoration: none; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: none; cursor: pointer; }
   .pillbtn:hover { color: var(--ink); border-color: var(--dim); }
+  /* AirplaneMode home button (app contract item 10): top right of every view, the player too */
+  a.am-home { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 10px; color: var(--dim);
+              background: var(--panel); border: 1px solid var(--line); text-decoration: none; transition: color .15s, border-color .15s, background .15s, opacity .3s; }
+  a.am-home:hover { color: var(--ink); border-color: var(--dim); }
+  a.am-home:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; color: var(--ink); }
+  .pbar a.am-home { margin-left: auto; border-radius: 50%; border: 0; background: #ffffff1a; color: var(--ink); }
+  .pbar a.am-home:hover { background: #ffffff33; }
   .lib { max-width: 1400px; margin: 0 auto; padding: 8px 0 60px; }
   .crumbs { padding: 8px 20px 0; font: .78rem var(--mono); color: var(--dim); display: flex; gap: 6px; flex-wrap: wrap; }
   .crumbs a { color: var(--dim); text-decoration: none; } .crumbs a:hover { color: var(--ink); }
@@ -79,8 +87,16 @@
 
   /* ---------- player ---------- */
   .player { position: fixed; inset: 0; background: #000; display: flex; flex-direction: column; z-index: 5; }
-  .pbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top)); background: linear-gradient(#000d, #0000); position: absolute; top: 0; left: 0; right: 0; z-index: 2; transition: opacity .3s; }
-  .player.idle .pbar { opacity: 0; pointer-events: none; }
+  .pbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top));
+          padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); position: absolute; top: 0; left: 0; right: 0; z-index: 2; }
+  .pbar::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(#000d, #0000); pointer-events: none; }
+  .pbar::before, .pbar > * { transition: opacity .3s; }
+  /* idle (video playing): the bar fades out, but the home button stays, dimmed, and still works */
+  .player.idle .pbar { pointer-events: none; }
+  .player.idle .pbar::before, .player.idle .pbar > :not(.am-home) { opacity: 0; }
+  .player.idle .pbar a.am-home { pointer-events: auto; opacity: .6; background: #0000004d; }
+  .player.idle .pbar a.am-home:hover, .player.idle .pbar a.am-home:focus-visible { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { a.am-home, .pbar::before, .pbar > * { transition: none; } }
   .back { width: 40px; height: 40px; border-radius: 50%; border: 0; background: #ffffff1a; cursor: pointer; display: grid; place-items: center; flex: none; }
   .back:hover { background: #ffffff33; }
   .back svg { width: 18px; height: 18px; }
@@ -144,7 +160,14 @@
 <div id="libView">
   <header class="top">
     <a class="brand" href="#"><span class="mark"><svg viewBox="0 0 12 14"><path d="M1 1l10 6-10 6z" fill="#1c0c0a"/></svg></span>Cinema</a>
-    <nav><a class="pillbtn" id="dropLink" href="../drop/">add in Drop</a><a class="pillbtn" href="../">AirplaneMode</a></nav>
+    <nav><a class="pillbtn" id="dropLink" href="../drop/">add in Drop</a>
+      <a class="am-home" href="../" aria-label="AirplaneMode home" title="AirplaneMode home">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none"
+             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>
+        </svg>
+      </a>
+    </nav>
   </header>
   <div class="crumbs" id="crumbs" hidden></div>
   <main class="lib" id="lib"><p class="empty">Loading the library…</p></main>
@@ -154,6 +177,12 @@
   <div class="pbar">
     <button class="back" id="back" type="button" aria-label="Back to the library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
     <div class="ptitle"><b id="pTitle"></b><small id="pSub"></small></div>
+    <a class="am-home" href="../" aria-label="AirplaneMode home" title="AirplaneMode home">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>
+      </svg>
+    </a>
   </div>
   <div class="stage" id="stage"></div>
 </div>

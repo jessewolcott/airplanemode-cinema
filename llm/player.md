@@ -1,7 +1,8 @@
 # The player
 
 `static/index.html:428-531`. The player is a fixed full-screen overlay (`#player`) containing a
-top bar (`.pbar`: back button, title and subtitle) and a `#stage`. It opens on `#play=<id>`
+top bar (`.pbar`: back button, title and subtitle, and the AirplaneMode home button
+`a.am-home` at the right end) and a `#stage`. It opens on `#play=<id>`
 through `route()` → `openPlayer(m)`.
 
 Module state: `media` (the `<video>`/`<audio>` element), `current` (the media item), and
@@ -129,9 +130,18 @@ Active only while `media` exists, and ignored when the focus is in an input or t
 ## Idle UI (`:517-521`)
 
 `armIdle()` removes `.idle` and, for **video only**, starts a 2.5 s timer that adds `.idle` to
-`#player` if the video is still playing. `.idle` fades out the top bar (CSS `:83`). It's re-armed
+`#player` if the video is still playing. `.idle` fades out the top bar's gradient (`.pbar::before`)
+and every child except `a.am-home`, which stays at 60% opacity and clickable (the platform's app
+contract: the home button is on every screen, the player included). The bar itself gets
+`pointer-events: none` while idle; the home button turns them back on. It's re-armed
 on `mousemove`, `touchstart` and `keydown` over the player, and on play/pause. Audio never goes
 idle.
+
+## Leaving with the home button
+
+`a.am-home` (`href="../"`) leaves without asking: `pagehide` saves the position, and the next
+visit resumes it, so nothing is lost. Native full screen shows only the video, so the button
+is hidden there until full screen ends (the browser's own UI, not ours).
 
 ## Interaction with the rest of the page
 

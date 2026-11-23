@@ -34,6 +34,12 @@ Global state: `lib` (the last `api/library` response), `byId` (media id → item
    `show`, `season`, `ep` and `epTitle`.
 3. It sets the header's "add in Drop" link (`#dropLink`) to `lib.drop_path`. The static
    `href="../drop/"` is only the default.
+
+The header (`.top`, shared by home, folder and show views): the brand ("Cinema", `href="#"`,
+the library start, never out of the app) on the left; on the right a `nav` with the "add in
+Drop" pill and the AirplaneMode home button `a.am-home` (`href="../"`, house SVG, 44 x 44 px,
+accent focus ring; app contract item 10). It replaced the old "AirplaneMode" text pill. `.top`
+pads with `env(safe-area-inset-*)` (the page sets `viewport-fit=cover`).
 4. `route()` renders the current view, then `posterQueue()` starts or continues poster grabbing.
 
 **Refresh loop** (`:578`): `setInterval(() => { if (player hidden) load(); }, 30000)`. It picks

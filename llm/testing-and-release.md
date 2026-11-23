@@ -21,6 +21,7 @@ Setup:
 
 | Test | Checks |
 |---|---|
+| `test_page_has_home_button` | exactly two `a.am-home` links (library header, player bar), both `href="../"` with `aria-label="AirplaneMode home"`; the old "AirplaneMode" text pill is gone |
 | `test_page_uses_relative_urls` | the page contains `fetch("api/library"` and no `"/api/`, and no `src=`/`href=` starts with `http:`, `https:`, `//` or `/x`. Keeps the app working under any path prefix (`/cinema/`) and offline |
 | `test_library_is_drops_media` | `drop_path == "../drop/"`; only the two real folders; only FILM and SONG in media (no PDF, text, bad id or bad type); FILM `kind=video`, parent Kids, `download False`; SONG's missing parent → `None`, `download` defaults to True; `poster` false |
 | `test_drop_down` | `fetch_drop` raises → 503 with "Drop" in `detail` |
