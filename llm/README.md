@@ -12,7 +12,7 @@ JPEG/WebP posters, which the first browser to show a video grabs from a frame of
 uploads.
 
 This folder is checked in (`.dockerignore` lists `llm`, so it stays out of the image). It's written for LLMs and engineers coming to
-the repo cold. Line references (`file:line`) are to the code as of release 0.1.1 (2026-11-22);
+the repo cold. Line references (`file:line`) are to the code as of release 0.1.2 (2026-11-22);
 re-check them if the code has moved.
 
 ## Files
@@ -34,8 +34,8 @@ re-check them if the code has moved.
 - Backend: `app.py`. Three routes: `GET /api/library`, `GET|PUT /api/posters/{id}`, and `GET /`
   for the page.
 - Frontend: `static/index.html`. Its sections are marked by comments: helpers and memory
-  (`:162`), TV series (`:198`), `// ---- library ----` (`:278`), routing (`:413`), player (`:428`),
-  posters (`:533`).
+  (`:191`), TV series (`:227`), `// ---- library ----` (`:307`), routing (`:442`), player (`:457`),
+  posters (`:562`).
 - Tests: `python tests/test_cinema.py` (API) and `node tests/test_series.mjs` (series logic,
   executed from the page's own source).
 - Rules that must not break: never proxy media; use only relative URLs in the page; treat

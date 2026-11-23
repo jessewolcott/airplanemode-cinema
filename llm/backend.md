@@ -126,7 +126,7 @@ when `poster` is false.
 ## Errors and the page route
 
 - `@app.exception_handler(HTTPException)` (`:143`) returns `{"detail": ...}` with the status and
-  any headers. The page shows `detail` when the library fails (`index.html:282`).
+  any headers. The page shows `detail` when the library fails (`index.html:311`).
 - `GET /` (`:148`) returns `static/index.html` with `Cache-Control: no-cache`, so new releases
   show up straight away. There's no static mount: the page is the only static file, and it
   inlines everything.

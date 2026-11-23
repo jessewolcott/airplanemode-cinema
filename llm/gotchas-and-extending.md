@@ -57,7 +57,7 @@
 
 ### Support a new episode file-name pattern
 
-1. Add a `[regex, m => [season|null, ep]]` entry to `EP_RES` (`static/index.html:201`). **Order
+1. Add a `[regex, m => [season|null, ep]]` entry to `EP_RES` (`static/index.html:230`). **Order
    matters**: the first match wins, and its position decides where the title starts. Put more
    specific patterns before looser ones, and use `\b` boundaries.
 2. Remember the input has already been normalized (no extension, `.`/`_` turned into spaces).
@@ -70,8 +70,8 @@
 
 ### Support a new season folder name
 
-Extend the word list in `seasonOf` (`:222`): `season|series|staffel|saison|temporada|s`, or the
-specials regex at `:221`. Add the case to the "season numbers from folder names" test. Check it
+Extend the word list in `seasonOf` (`:251`): `season|series|staffel|saison|temporada|s`, or the
+specials regex at `:250`. Add the case to the "season numbers from folder names" test. Check it
 doesn't swallow ordinary folder names (e.g. "Beach 2024" must stay `null`).
 
 ### Add a backend endpoint
@@ -91,7 +91,7 @@ currently served as an attachment (`application/octet-stream`), and downloads ma
 
 ### Change what "finished"/"started" mean
 
-Edit `finished`/`started` (`:178-179`). They're inside the test slice, and `showState` uses them.
+Edit `finished`/`started` (`:207-208`). They're inside the test slice, and `showState` uses them.
 Re-check test 5's numbers (1499/1500 must be finished; 300/1500 must not be) and short clips
 (anything under 300 s depends only on the 95% rule).
 

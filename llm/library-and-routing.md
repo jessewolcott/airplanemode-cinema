@@ -1,11 +1,11 @@
 # The page: loading, routing, home, folders, show page
 
-Everything is in `static/index.html`, one `<script>` block (`:161-578`). There's no framework:
+Everything is in `static/index.html`, one `<script>` block (`:190-607`). There's no framework:
 views are built as HTML strings and assigned with `innerHTML`, and every value from Drop goes
-through `esc()` (`:163`, which escapes `& < > " '`). Two top-level containers: `#libView` (header,
+through `esc()` (`:192`, which escapes `& < > " '`). Two top-level containers: `#libView` (header,
 `#crumbs`, `#lib`) and `#player` (a fixed overlay). Only one is visible at a time.
 
-## Helpers (`:162-196`)
+## Helpers (`:191-225`)
 
 | Helper | Does |
 |---|---|
@@ -25,7 +25,7 @@ through `esc()` (`:163`, which escapes `& < > " '`). Two top-level containers: `
 Global state: `lib` (the last `api/library` response), `byId` (media id → item), `folderById`,
 `shows` (see tv-series.md).
 
-## Loading (`load()`, `:279-294`)
+## Loading (`load()`, `:308-323`)
 
 1. `fetch("api/library", {cache: "no-store"})`. If it fails or isn't OK, `#lib` becomes an
    "The library isn't reachable" panel with the server's `detail` and a *Try again* button, and
@@ -34,20 +34,20 @@ Global state: `lib` (the last `api/library` response), `byId` (media id → item
    `show`, `season`, `ep` and `epTitle`.
 3. It sets the header's "add in Drop" link (`#dropLink`) to `lib.drop_path`. The static
    `href="../drop/"` is only the default.
+4. `route()` renders the current view, then `posterQueue()` starts or continues poster grabbing.
 
 The header (`.top`, shared by home, folder and show views): the brand ("Cinema", `href="#"`,
 the library start, never out of the app) on the left; on the right a `nav` with the "add in
 Drop" pill and the AirplaneMode home button `a.am-home` (`href="../"`, house SVG, 44 x 44 px,
 accent focus ring; app contract item 10). It replaced the old "AirplaneMode" text pill. `.top`
 pads with `env(safe-area-inset-*)` (the page sets `viewport-fit=cover`).
-4. `route()` renders the current view, then `posterQueue()` starts or continues poster grabbing.
 
-**Refresh loop** (`:578`): `setInterval(() => { if (player hidden) load(); }, 30000)`. It picks
+**Refresh loop** (`:607`): `setInterval(() => { if (player hidden) load(); }, 30000)`. It picks
 up new files on Drop every 30 s, but never while something is playing. Each refresh replaces
 `lib` with fresh objects and re-renders through `route()`, which restores the scroll position
 from `scrollMem`.
 
-## Routing (`:413-426`)
+## Routing (`:442-455`)
 
 The state lives in `location.hash`:
 
@@ -72,11 +72,11 @@ same 16-hex format as the server.
 - `renderFolder` on a show id redirects to `#show=`. Unknown folder or show ids redirect home
   (`go("")`).
 
-## Cards (`card(m, opts)`, `:304-321`)
+## Cards (`card(m, opts)`, `:333-350`)
 
 Each card is an `<a class="card" href="#play=<id>">`:
 
-- **Poster area**: the background is `gradient(artFor(m))`. `artFor` (`:303`) gives the show name,
+- **Poster area**: the background is `gradient(artFor(m))`. `artFor` (`:332`) gives the show name,
   the folder label, or the file name, so every card in a show or folder shares one colour. The
   placeholder icon is a note (audio) or film (video without a poster). If `m.poster` is true, an
   `<img src="api/posters/<id>" loading="lazy">` fades in on load (`.on`).
@@ -92,15 +92,15 @@ Each card is an `<a class="card" href="#play=<id>">`:
 - Audio cards get the `sq` class (square, narrower). Unplayable cards get `cant` (50% opacity).
   They stay clickable, and the player explains.
 
-`posterBox(m, art, extra)` (`:296`) is the same poster markup without the link. The show card,
+`posterBox(m, art, extra)` (`:325`) is the same poster markup without the link. The show card,
 show header and episode rows use it.
 
-`showCard(sh)` (`:322-331`) links to `#show=<id>`. Its face is the current episode's poster, else
+`showCard(sh)` (`:351-360`) links to `#show=<id>`. Its face is the current episode's poster, else
 any episode with a poster. Its meta: `"<epLong> · in progress"` (continue), `"Next: <epLong>"`,
 `"watched"`, or for a fresh show `"N seasons · M episodes"`. The season count leaves out
 specials, and the "N seasons ·" part appears only when the show has more than one season entry.
 
-## Home (`renderHome()`, `:333-362`)
+## Home (`renderHome()`, `:362-391`)
 
 If Drop has no media: an empty state that explains how to load files into Drop and tap **keep**,
 with an *Open Drop* button. Otherwise these shelves, in order:
@@ -114,16 +114,16 @@ with an *Open Drop* button. Otherwise these shelves, in order:
      "Next up". Clicking it plays that episode directly.
 2. **Shows**: every show, sorted by name with `nat`, as `showCard`s.
 3. **One shelf per folder** that directly holds media and isn't a show or inside one. It's a
-   depth-first walk in natural order (`walk` at `:356`). A show's subtree is skipped entirely, so
+   depth-first walk in natural order (`walk` at `:385`). A show's subtree is skipped entirely, so
    season folders never become shelves. The shelf title is the full path label ("Movies / Kids"),
    linking to `#folder=<id>`. Folders with only subfolders get no shelf of their own.
 4. **Loose files** (top level, no folder): titled "Everything else" if any folder shelf or show
    exists, else "On Drop".
 
-`shelf(title, list, fid, layout)` (`:363`) builds a section. The layout is `row` on home and
+`shelf(title, list, fid, layout)` (`:392`) builds a section. The layout is `row` on home and
 `grid` in folder views. A grid where every item is audio gets the `audio` class (smaller squares).
 
-## Folder view (`renderFolder(fid)`, `:368-385`)
+## Folder view (`renderFolder(fid)`, `:397-414`)
 
 - Breadcrumbs: `Library / A / B / **Current**`.
 - **Chips** for subfolders that contain media somewhere below (`countBelow > 0`), with the count.
@@ -133,7 +133,7 @@ with an *Open Drop* button. Otherwise these shelves, in order:
   file), then a grid of cards.
 - If it holds nothing at all: "Nothing playable in this folder."
 
-## Show page (`renderShow(id, wantSeason)`, `:387-411`)
+## Show page (`renderShow(id, wantSeason)`, `:416-440`)
 
 - `st = showState(sh)`. The visible season is `wantSeason` if the show has it, else the season of
   `st.m` (so the page opens on the season you're in).

@@ -4,7 +4,7 @@ Posters are made **in the browser**, not on the box. The box has no ffmpeg, and 
 there would break the 64 MB budget. The first device that shows the library and can play a video
 grabs a frame and uploads it. After that, every device gets it from `api/posters/<id>`.
 
-## The queue (`posterQueue()`, `static/index.html:534-553`)
+## The queue (`posterQueue()`, `static/index.html:563-582`)
 
 It runs after every `load()` (the first load and each 30 s refresh). A module flag `postering`
 keeps only one queue running.
@@ -31,7 +31,7 @@ Then:
    (posters are served with a 1-day private cache). Show cards and episode rows aren't patched;
    they pick the poster up on the next render (the 30 s refresh or navigation).
 
-## Grabbing a frame (`grab(m)`, `:554-575`)
+## Grabbing a frame (`grab(m)`, `:583-604`)
 
 ```
 v = <video>; muted, playsInline, preload="metadata", crossOrigin="anonymous"
@@ -43,7 +43,7 @@ v.src = src(m)        // straight from Drop, like playback
 
 - **Seek target**: 12% in skips black openings and studio logos, at least 1 s, at most 5 min (so
   long films don't seek deep into the file).
-- **Cover-crop** (`:566-569`): the source aspect is `r = videoWidth / videoHeight` (16:9 if
+- **Cover-crop** (`:595-598`): the source aspect is `r = videoWidth / videoHeight` (16:9 if
   unknown). If wider than 16:9, crop the sides (`sw = sh·16/9`, centred). Otherwise crop the top
   and bottom (`sh = sw·9/16`, centred). Then `drawImage(v, sx, sy, sw, sh, 0, 0, 480, 270)`, so
   portrait phone videos and 4:3 footage both fill the 16:9 card without letterboxing.
@@ -62,7 +62,7 @@ so the frame is readable. In this repo's standalone `compose.yaml`, Drop is
 `http://localhost:8766` and Cinema `:8768`, so they're different origins. Drop sends no CORS
 headers, so with `crossOrigin="anonymous"` the video either fails to load (`onerror`) or taints
 the canvas (the `catch`). Either way `grab` rejects, the device sets `nop.<id>` and moves on: "no
-posters, no harm" (the comment at `:571`). Test posters in the **platform dev stack** instead.
+posters, no harm" (the comment at `:600`). Test posters in the **platform dev stack** instead.
 
 Side effect: running standalone sets `nop.*` flags in that origin's `localStorage`
 (`localhost:8768`). They don't affect the platform stack (`localhost:8080`, a different origin).

@@ -1,7 +1,7 @@
 # TV series
 
-All of this is in `static/index.html` between `const nat =` (`:167`) and `// ---- library ----`
-(`:278`). `tests/test_series.mjs` executes **exactly that slice** under Node (see
+All of this is in `static/index.html` between `const nat =` (`:196`) and `// ---- library ----`
+(`:307`). `tests/test_series.mjs` executes **exactly that slice** under Node (see
 testing-and-release.md), so:
 
 - keep the series code inside those markers;
@@ -24,7 +24,7 @@ subfolders are **seasons**, never shelves. `buildShows()` mutates each episode's
 `shows` is a `Map` of folder id → `{id, name, episodes, seasons}`. `episodes` are in watch order;
 `seasons` lists the distinct season numbers in that order (specials last).
 
-## `parseEp(name)` (`:201-218`)
+## `parseEp(name)` (`:230-247`)
 
 The name is first normalized: drop the extension (`\.[a-z0-9]{2,5}$`), then turn every run of
 `.`/`_` into a space. The patterns are tried **in order**, and the first match wins:
@@ -56,7 +56,7 @@ Deliberately not matched: a bare number ("03 - Title.mp4"), resolutions, years. 
 case-sensitive keeps words like "e1" inside other tokens from counting, though `\b` already guards
 most of that.
 
-## `seasonOf(folderName)` (`:219-224`)
+## `seasonOf(folderName)` (`:248-253`)
 
 - `^(specials?|extras?)$` (case-insensitive) → `0`.
 - Else `^(?:season|series|staffel|saison|temporada|s)?[ ._-]*(\d{1,2})$`, anchored: an optional
@@ -65,7 +65,7 @@ most of that.
 - Else `\b(?:season|series)[ ._-]*(\d{1,2})\b` anywhere, e.g. "Show Season 6 (2019)" → 6.
 - Else `null` ("Kids", "Movies", "Beach 2024"; 4 digits don't count).
 
-## `isShow(folder)` (`:226-230`)
+## `isShow(folder)` (`:255-259`)
 
 A folder is a show if **either**:
 
@@ -79,14 +79,14 @@ doesn't make it a show. In the test library, "TV/Night Ferry/{Part A, Part B}/Ni
 makes **Night Ferry** a show (its subfolders contain episode files), but not **TV**: TV's only
 child "Night Ferry" has no season name and no episode files directly inside it.
 
-## `buildShows()` (`:231-240`)
+## `buildShows()` (`:260-269`)
 
 It resets `shows` and deletes `m.show` from every item, then walks the folder tree from the top
 (`walk(null)`) in natural order. For each subfolder: if `isShow(f)` → `addShow(f)` and **don't
 descend** (shows can't nest, and a show's subfolders are seasons). Otherwise recurse. Loose
 top-level files are never part of a show (the root isn't a folder).
 
-## `addShow(f)`: season assignment and order (`:241-257`)
+## `addShow(f)`: season assignment and order (`:270-286`)
 
 ```js
 collect(fid, season, idx):
@@ -111,7 +111,7 @@ Priority for an episode's season:
 
 `??` keeps `0`, so "Specials" (season 0) propagates correctly.
 
-**Sort** (`:253-254`): by season, with `0` mapped to 999 (specials last); then by episode number
+**Sort** (`:282-283`): by season, with `0` mapped to 999 (specials last); then by episode number
 (`null` → 1e6, so unnumbered files go after the numbered ones in a season); then `nat` by file
 name. `seasons = [...new Set(episodes.map(m => m.season))]`, which is therefore in watch order.
 
@@ -125,7 +125,7 @@ Coastal Life/
 → episodes [S1E1, S1E2, S1E3, S2E1, S2E2, S0(null)]; seasons [1, 2, 0]
 ```
 
-## Labels (`:258-267`)
+## Labels (`:287-296`)
 
 - `seasonName(n)`: "Specials" for 0, else "Season n".
 - `epShort(m)`: `E<ep> · <epTitle>`, or `E<ep>`. Without an episode number: `epTitle`, or else
@@ -135,7 +135,7 @@ Coastal Life/
   E.g. "S1 · E2 · Low Tide", "Special · Behind the Scenes".
 - `titleOf(m)`: `epLong(m)` for episodes, `tidy(m.name)` for everything else ("Whale Song").
 
-## `showState(sh)`: what to watch next (`:269-276`)
+## `showState(sh)`: what to watch next (`:298-305`)
 
 It uses this device's saved positions (`pos(id)`, see player.md for `finished`):
 

@@ -4,7 +4,7 @@ Cinema has no accounts and keeps no watch history on the server. Everything pers
 browser's `localStorage`, so it's per device and per origin. Every tablet on the plane keeps its
 own place.
 
-## Access layer (`static/index.html:171-176`)
+## Access layer (`static/index.html:200-205`)
 
 ```js
 const mem = {

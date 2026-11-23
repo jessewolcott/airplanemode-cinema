@@ -1,6 +1,6 @@
 # The player
 
-`static/index.html:428-531`. The player is a fixed full-screen overlay (`#player`) containing a
+`static/index.html:457-560`. The player is a fixed full-screen overlay (`#player`) containing a
 top bar (`.pbar`: back button, title and subtitle, and the AirplaneMode home button
 `a.am-home` at the right end) and a `#stage`. It opens on `#play=<id>`
 through `route()` → `openPlayer(m)`.
@@ -8,7 +8,7 @@ through `route()` → `openPlayer(m)`.
 Module state: `media` (the `<video>`/`<audio>` element), `current` (the media item), and
 `saveTimer`, `nextTimer`, `idleTimer`.
 
-## `openPlayer(m)` step by step (`:430-478`)
+## `openPlayer(m)` step by step (`:459-507`)
 
 1. `closePlayer(true)` tears down any previous media (saving its position first) but keeps the
    player view visible, so going episode to episode doesn't flash the library.
@@ -42,13 +42,13 @@ Module state: `media` (the `<video>`/`<audio>` element), `current` (the media it
 - On `loadedmetadata` (once): it stores the duration as `mem d.<id>` (used by card badges and the
   track list). If the saved position `p` is `started(p)`, it seeks to `p.t` and shows a toast
   **"Picked up at m:ss"** with a **Start over** button (sets `currentTime = 0`).
-- `save()` (`:479`): if there's media with a duration → `savePos(current.id, currentTime,
+- `save()` (`:508`): if there's media with a duration → `savePos(current.id, currentTime,
   duration)`, which writes `cinema.p.<id> = {t, d, at: Date.now()}`. `savePos` ignores `d <= 0`.
 - It's called every **5 s** (`saveTimer`), on `pause`, on `ended`, on `pagehide`, when the page
   goes hidden (`visibilitychange`), and in `closePlayer`. So locking the phone or switching tabs
   keeps the place.
 
-## Finished and started (`:177-179`)
+## Finished and started (`:206-208`)
 
 ```js
 // the last 25 s of a film are credits; a short clip isn't finished until it nearly is
@@ -64,7 +64,7 @@ const started  = p => p && p.d && p.t > Math.min(15, p.d * 0.1) && !finished(p);
   Continue.
 - Both are falsy when there's no position.
 
-## Toasts (`toast(text, label, fn)`, `:495-502`)
+## Toasts (`toast(text, label, fn)`, `:524-531`)
 
 There's one toast at a time (an existing one is removed). It's a pill at the bottom with a button
 that runs `fn`, and it disappears after 7 s. It's used for resume ("Start over") and for errors.
@@ -74,7 +74,7 @@ that runs `fn`, and it disappears after 7 s. It's used for resume ("Start over")
 On the media element's `error` event: the toast "This file won't play here." with **Back**
 (`history.back()` if there's history, else home).
 
-## Up next (`upNext(n)`, `:503-516`)
+## Up next (`upNext(n)`, `:532-545`)
 
 On `ended`: `save()`, then `upNext(list[idx + 1])`.
 
@@ -88,7 +88,7 @@ On `ended`: `save()`, then `upNext(list[idx + 1])`.
 - `hideNext()` clears the timer and removes the card. It runs on Cancel and on the media's
   `play` event (e.g. the user scrubs back and plays again).
 
-## Back button and Escape (`:487-491`)
+## Back button and Escape (`:516-520`)
 
 - Episode → `#show=<show>&s=<season>`.
 - Otherwise → `#folder=<parent>`, or home for loose files.
@@ -96,7 +96,7 @@ On `ended`: `save()`, then `upNext(list[idx + 1])`.
 It navigates rather than calling `history.back()`, so it works the same when the player was
 opened directly from a Drop link.
 
-## `closePlayer(keepView)` (`:480-486`)
+## `closePlayer(keepView)` (`:509-515`)
 
 It saves the position, pauses, **removes `src` and calls `load()`**. That makes the browser drop
 the HTTP connection to Drop instead of buffering on in the background. It then clears all timers,
@@ -104,7 +104,7 @@ nulls `media`/`current` and empties the stage. Unless `keepView` is set, it hide
 shows the library and resets the title. `route()` calls it for every non-play route, which makes
 the browser's Back button a full stop.
 
-## Media Session (`:471-476`)
+## Media Session (`:500-505`)
 
 If supported (lock screen and notification controls on phones):
 
@@ -114,7 +114,7 @@ If supported (lock screen and notification controls on phones):
 - the `nexttrack` / `previoustrack` handlers play `list[idx ± 1]`, or are set to `null` at the
   ends of the list. For shows, that follows the whole show across seasons.
 
-## Keyboard (`:522-531`)
+## Keyboard (`:551-560`)
 
 Active only while `media` exists, and ignored when the focus is in an input or textarea:
 
@@ -127,7 +127,7 @@ Active only while `media` exists, and ignored when the focus is in an input or t
 | `m` | mute/unmute |
 | Escape | back (only when not full screen, where Escape exits full screen instead) |
 
-## Idle UI (`:517-521`)
+## Idle UI (`:546-550`)
 
 `armIdle()` removes `.idle` and, for **video only**, starts a 2.5 s timer that adds `.idle` to
 `#player` if the video is still playing. `.idle` fades out the top bar's gradient (`.pbar::before`)
