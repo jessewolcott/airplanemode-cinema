@@ -1,11 +1,13 @@
 """Cinema API tests.  Run: python tests/test_cinema.py"""
 import os
 import re
+import threading
+import time
 import sys
 import tempfile
 from pathlib import Path
 
-os.environ.update(DATA_DIR=tempfile.mkdtemp(prefix="cinema-test-"))
+os.environ.update(DATA_DIR=tempfile.mkdtemp(prefix="cinema-test-"), ADMIN_URL="", CINEMA_POLL_WAIT="0.3")
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi.testclient import TestClient  # noqa: E402
@@ -94,6 +96,111 @@ def test_posters_for_deleted_files_go():
         assert not (cinema.POSTERS / f"{FILM}.img").exists()
     finally:
         cinema.fetch_drop = lambda: DROP
+
+
+# ---------------- Sync Watch ----------------
+def seat(token):
+    return {**H, "X-Seat": token}
+
+
+def test_watch_party_start_join_and_control():
+    cinema._known["at"] = 0                  # the last test left Drop's list without FILM in the cache
+    assert c.post("/api/watch", json={"item": FILM}).status_code == 403                 # no header
+    assert c.post("/api/watch", json={"item": DOC}, headers=H).status_code == 404      # not media
+    assert c.post("/api/watch", json={"item": FILM, "pos": -1}, headers=H).status_code == 400
+    assert c.post("/api/watch", json={"item": FILM, "pos": "10"}, headers=H).status_code == 400
+    a = ok(c.post("/api/watch", json={"item": FILM, "pos": 30, "playing": False}, headers=H))
+    code, ta = a["code"], a["token"]
+    st = a["state"]
+    assert st["item"] == FILM and st["pos"] == 30 and st["playing"] is False and st["you"] == 0
+    assert [p["code"] for p in ok(c.get("/api/watch"))["parties"]] == [code]
+    b = ok(c.post(f"/api/watch/{code.lower()}/join", json={}, headers=H))
+    tb = b["token"]
+    assert b["state"]["you"] == 1 and len(b["state"]["seats"]) == 2
+    assert ok(c.post(f"/api/watch/{code}/join", json={"token": tb}, headers=H))["token"] == tb   # same seat back
+    # play: the position runs on from the moment on the box's clock
+    st = ok(c.post(f"/api/watch/{code}/act", json={"type": "play", "pos": 31.5}, headers=seat(tb)))
+    assert st["playing"] and st["pos"] == 31.5 and st["last"]["type"] == "play"
+    room = cinema.parties.get(code)
+    time.sleep(0.2)
+    assert 31.6 < room.position() < 32.5
+    st = ok(c.post(f"/api/watch/{code}/act", json={"type": "pause"}, headers=seat(ta)))   # no pos: where it is now
+    assert not st["playing"] and 31.6 < st["pos"] < 32.5
+    st = ok(c.post(f"/api/watch/{code}/act", json={"type": "seek", "pos": 600}, headers=seat(ta)))
+    assert st["pos"] == 600 and not st["playing"]                                      # seeking keeps play/pause
+    # changing the file: everyone's up-next fires at once, the second one changes nothing
+    st = ok(c.post(f"/api/watch/{code}/act", json={"type": "item", "item": SONG}, headers=seat(tb)))
+    v = st["version"]
+    assert st["item"] == SONG and st["pos"] == 0 and st["playing"]
+    assert ok(c.post(f"/api/watch/{code}/act", json={"type": "item", "item": SONG}, headers=seat(ta)))["version"] == v
+    assert c.post(f"/api/watch/{code}/act", json={"type": "item", "item": DOC}, headers=seat(ta)).status_code == 404
+    assert c.post(f"/api/watch/{code}/act", json={"type": "dance"}, headers=seat(ta)).status_code == 400
+    assert c.post(f"/api/watch/{code}/act", json={"type": "play"}, headers=seat("nope")).status_code == 403
+    assert c.get(f"/api/watch/{code}/state", headers={"X-Seat": "nope"}).status_code == 403
+    # leaving: the last one out ends the party
+    ok(c.post(f"/api/watch/{code}/leave", headers=seat(ta)))
+    assert len(ok(c.get(f"/api/watch/{code}/state", headers={"X-Seat": tb}))["seats"]) == 1
+    ok(c.post(f"/api/watch/{code}/leave", headers=seat(tb)))
+    assert c.get(f"/api/watch/{code}/state", headers={"X-Seat": tb}).status_code == 404
+    assert ok(c.get("/api/watch"))["parties"] == []
+
+
+def test_watch_long_poll_wakes_on_a_change():
+    a = ok(c.post("/api/watch", json={"item": FILM}, headers=H))
+    code, ta = a["code"], a["token"]
+    tb = ok(c.post(f"/api/watch/{code}/join", json={}, headers=H))["token"]
+    v = a["state"]["version"] + 1                                   # after b joined
+    t0 = time.time()
+    st = ok(c.get(f"/api/watch/{code}/state", params={"since": v}, headers={"X-Seat": tb}))
+    assert st["version"] == v and 0.25 < time.time() - t0 < 2       # nothing changed: waited
+    out = {}
+    t = threading.Thread(target=lambda: out.update(st=c.get(f"/api/watch/{code}/state", params={"since": v},
+                                                             headers={"X-Seat": tb}).json()))
+    t.start()
+    time.sleep(0.1)
+    ok(c.post(f"/api/watch/{code}/act", json={"type": "pause", "pos": 5}, headers=seat(ta)))
+    t.join(5)
+    assert out["st"]["playing"] is False and out["st"]["pos"] == 5
+    assert abs(ok(c.get("/api/watch/clock"))["now"] - time.time() * 1000) < 1000
+    for tok in (ta, tb):
+        c.post(f"/api/watch/{code}/leave", headers=seat(tok))
+
+
+def test_watch_party_nobody_polls_ends():
+    a = ok(c.post("/api/watch", json={"item": FILM}, headers=H))
+    tb = ok(c.post(f"/api/watch/{a['code']}/join", json={}, headers=H))["token"]
+    room = cinema.parties.get(a["code"])
+    room.seats[1].seen -= 120                                    # b closed the page without leaving
+    assert ok(c.get("/api/watch"))["parties"][0]["watching"] == 1
+    cinema.parties.sweep()
+    assert a["code"] in cinema.parties.rooms                     # a is still here
+    for s in room.seats:
+        s.seen -= cinema.GONE_AFTER + 1
+    cinema.parties.sweep()
+    assert a["code"] not in cinema.parties.rooms                 # nobody for 10 minutes: over
+    assert c.get(f"/api/watch/{a['code']}/state", headers={"X-Seat": tb}).status_code == 404
+
+
+def test_watch_names_come_from_whos_who():
+    people = {"phone": {"id": "p1", "name": "Sam", "avatar": "🦊"}}
+
+    async def fake_whois(request):
+        return people.get(request.headers.get("x-test-device"))
+    old, cinema.whois = cinema.whois, fake_whois
+    try:
+        sam = {**H, "X-Test-Device": "phone"}
+        a = ok(c.post("/api/watch", json={"item": FILM}, headers=sam))
+        assert (a["state"]["seats"][0]["name"], a["state"]["seats"][0]["avatar"]) == ("Sam", "🦊")
+        p = ok(c.get("/api/watch"))["parties"][0]
+        assert p["host"] == "Sam" and p["avatar"] == "🦊" and p["watching"] == 1 and p["item"] == FILM
+        again = ok(c.post(f"/api/watch/{a['code']}/join", json={}, headers=sam))      # Sam's other browser
+        assert again["token"] == a["token"]
+        guest = ok(c.post(f"/api/watch/{a['code']}/join", json={}, headers=H))
+        assert guest["state"]["seats"][1]["name"] == "Traveller"
+        for tok in (a["token"], guest["token"]):
+            c.post(f"/api/watch/{a['code']}/leave", headers=seat(tok))
+    finally:
+        cinema.whois = old
 
 
 if __name__ == "__main__":

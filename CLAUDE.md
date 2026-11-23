@@ -15,6 +15,10 @@ python tests/test_cinema.py          # API tests (CI runs these before building)
 node tests/test_series.mjs           # series logic (episode parsing, shows, watch order), from the page's code
 ```
 
+Local venv: `py -3.10 -m venv .venv`, then `.venv\Scripts\pip install -r requirements.txt
+httpx==0.28.1` (git-ignored). `requirements.txt` pins `amrooms` from the platform's
+`rooms-v0.1.1` tag tarball.
+
 The real test bed is the platform dev stack (`../airplanemode`, compose.dev.yaml builds this
 repo): same origin, so posters work and Drop's "Play in Cinema" appears.
 
@@ -33,6 +37,13 @@ repo): same origin, so posters work and Drop's "Play in Cinema" appears.
   slice under Node, so keep it free of DOM work at load time. A show's subfolders are seasons,
   never shelves; `#show=<id>[&s=<n>]` is its page; the player's playlist is the show's whole
   episode list. Add a case to the test for any new file-name pattern.
+- **Sync Watch** (watch parties, platform decision 0023): `Party` in `app.py` is an
+  `amrooms.Room` (the platform's Rooms SDK) holding the file, play/pause and the position at a
+  moment on the box's clock; anyone in the party controls it. Each phone still streams from
+  Drop. The page's decisions (`partyPos`, `syncStep`, `ownEvent`, `clockOffset`) live in the
+  series slice so `tests/test_series.mjs` runs them; keep them pure. Detect a person's seek on
+  `seeking`, never `seeked` (the sync loop would undo it). In a party the player never
+  autoplays. Details: `llm/sync-watch.md`.
 
 ## Releasing
 

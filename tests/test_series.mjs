@@ -14,7 +14,7 @@ globalThis.localStorage = { getItem: k => (store.has(k) ? store.get(k) : null), 
 globalThis.document = { createElement: () => ({ canPlayType: () => "probably" }) };
 
 const api = new Function(`${html.slice(start, end)}
-  return { parseEp, seasonOf, buildShows, showState, epLong, epShort, titleOf, savePos,
+  return { parseEp, seasonOf, buildShows, showState, epLong, epShort, titleOf, savePos, partyPos, syncStep, ownEvent, clockOffset,
            setLib: l => { lib = l; byId = new Map(l.media.map(m => [m.id, m])); folderById = new Map(l.folders.map(f => [f.id, f])); },
            shows: () => shows };`)();
 
@@ -92,6 +92,48 @@ test("what to watch next in a show", () => {
   assert.deepEqual([api.showState(sh).mode, api.showState(sh).m], ["next", ep[3]]);   // carries into season 2
   for (const e of ep.slice(3)) api.savePos(e.id, 1499, 1500);
   assert.equal(api.showState(sh).mode, "done");
+});
+
+
+
+// ---- Sync Watch decisions ----
+test("party position runs on while playing, stands still while paused", () => {
+  assert.equal(api.partyPos({ playing: true, pos: 10, at: 1000 }, 3500), 12.5);
+  assert.equal(api.partyPos({ playing: false, pos: 10, at: 1000 }, 3500), 10);
+  assert.equal(api.partyPos({ playing: true, pos: 10, at: 5000 }, 3500), 10);   // a clock behind the box: never backwards
+});
+
+test("following the party: nudge small drift, jump big drift, mirror play/pause", () => {
+  const st = { playing: true, pos: 100, at: 0 }, at = t => ({ t, paused: false, ended: false });
+  assert.deepEqual(api.syncStep(st, 0, at(100.03)), { pause: false, play: false, seek: null, rate: 1 });   // in step
+  const behind = api.syncStep(st, 0, at(99.6));
+  assert.ok(behind.seek === null && behind.rate > 1 && behind.rate <= 1.1, JSON.stringify(behind));        // catch up
+  const ahead = api.syncStep(st, 0, at(100.4));
+  assert.ok(ahead.seek === null && ahead.rate < 1 && ahead.rate >= 0.9, JSON.stringify(ahead));           // ease off
+  assert.equal(api.syncStep(st, 0, at(90)).rate, 1);
+  assert.equal(api.syncStep(st, 0, at(90)).seek, 100);                                                    // far off: jump
+  assert.equal(api.syncStep(st, 0, at(98.5)).seek, 100);
+  assert.equal(api.syncStep(st, 0, { t: 100, paused: true, ended: false }).play, true);                    // they play: we play
+  assert.equal(api.syncStep(st, 0, { t: 100, paused: true, ended: true }).play, false);                    // but not a finished file
+  const paused = { playing: false, pos: 50, at: 0 };
+  assert.deepEqual(api.syncStep(paused, 9e9, at(50.1)), { pause: true, play: false, seek: null, rate: 1 }); // they pause: we pause
+  assert.equal(api.syncStep(paused, 0, { t: 60, paused: true, ended: false }).seek, 50);                   // and stand where they stand
+});
+
+test("only the person's own actions go to the party, not our corrections", () => {
+  const playing = { playing: true, pos: 100, at: 0 }, paused = { playing: false, pos: 100, at: 0 };
+  const loc = (t, ended = false) => ({ t, paused: false, ended });
+  assert.equal(api.ownEvent("play", playing, 0, loc(100)), true);      // we started it to follow the party
+  assert.equal(api.ownEvent("play", paused, 0, loc(100)), false);      // the person pressed play
+  assert.equal(api.ownEvent("pause", paused, 0, loc(100)), true);
+  assert.equal(api.ownEvent("pause", playing, 0, loc(100)), false);    // the person paused
+  assert.equal(api.ownEvent("pause", playing, 0, loc(100, true)), true); // the file ended: not a pause for everyone
+  assert.equal(api.ownEvent("seeking", playing, 0, loc(100.5)), true);  // our own jump
+  assert.equal(api.ownEvent("seeking", playing, 0, loc(400)), false);   // the person skipped
+});
+
+test("clock offset comes from the quickest round trip", () => {
+  assert.equal(api.clockOffset([{ rtt: 80, offset: 500 }, { rtt: 12, offset: 230 }, { rtt: 40, offset: 260 }]), 230);
 });
 
 console.log(`${n} passed`);

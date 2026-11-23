@@ -152,6 +152,31 @@
   .ep.cant { opacity: .5; }
   @media (max-width: 600px) { .ep { grid-template-columns: 128px 1fr; gap: 12px; } .tabs, .eps { padding-left: 16px; padding-right: 16px; } }
   .note { text-align: center; color: var(--dim); font-size: .85rem; padding: 0 20px; }
+  /* Sync Watch */
+  .together { display: flex; align-items: center; gap: 7px; height: 40px; padding: 0 14px 0 11px; border-radius: 99px; border: 0; background: #ffffff1a;
+              cursor: pointer; font-weight: 600; font-size: .88rem; flex: none; margin-left: auto; white-space: nowrap; }
+  .together:hover { background: #ffffff33; }
+  .together:focus-visible, .party button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .together.on { background: var(--accent); color: #1c0c0a; }
+  .together svg { width: 18px; height: 18px; flex: none; }
+  .together + a.am-home { margin-left: 0; }
+  @media (max-width: 600px) { .together:not(.on) .lbl { display: none; } .together:not(.on) { padding: 0 11px; } }
+  .party { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 54px); right: max(16px, env(safe-area-inset-right)); width: min(330px, calc(100vw - 32px));
+           background: #151519f7; border: 1px solid var(--line2); border-radius: 14px; padding: 14px 16px; z-index: 4; box-shadow: 0 16px 40px #000c; }
+  .party h3 { margin: 0 0 4px; font-size: 1rem; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .party .code { font: 700 .85rem var(--mono); color: var(--amber); letter-spacing: .14em; }
+  .party p { margin: 6px 0; color: var(--dim); font-size: .85rem; line-height: 1.45; }
+  .party p a { color: var(--accent2); }
+  .party ul { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 7px; max-height: 38vh; overflow: auto; }
+  .party li { display: flex; align-items: center; gap: 10px; font-size: .92rem; }
+  .party li small { color: var(--dim); }
+  .party li .av { width: 30px; height: 30px; border-radius: 50%; background: var(--panel2); display: grid; place-items: center; font-size: 1.05rem; font-weight: 700; flex: none; }
+  .party li.away { opacity: .5; }
+  .party .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; flex-wrap: wrap; }
+  .party button { border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; font-weight: 600; }
+  .party .go { background: var(--accent); color: #1c0c0a; }
+  .party .ghost { background: #ffffff1a; }
+  .toast.fixed { position: fixed; z-index: 9; padding-right: 16px; }
   @media (max-width: 600px) { .card { width: 200px; } .card.sq { width: 140px; } .grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } .top { padding: 14px 16px 4px; } .shelf h2 { margin: 0 16px 8px; } .row, .grid, .chips { padding-left: 16px; padding-right: 16px; } .row { scroll-padding-inline: 16px; } .cta { padding: 0 16px 8px; } .crumbs { padding: 8px 16px 0; } }
 </style>
 </head>
@@ -177,6 +202,10 @@
   <div class="pbar">
     <button class="back" id="back" type="button" aria-label="Back to the library"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
     <div class="ptitle"><b id="pTitle"></b><small id="pSub"></small></div>
+    <button class="together" id="together" type="button" aria-expanded="false" aria-controls="party" title="Watch together on this hotspot">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19.5c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14.6c2.4.2 4 1.8 4.5 4.4"/></svg>
+      <span class="lbl" id="togetherLbl">Watch together</span>
+    </button>
     <a class="am-home" href="../" aria-label="AirplaneMode home" title="AirplaneMode home">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none"
            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -185,6 +214,7 @@
     </a>
   </div>
   <div class="stage" id="stage"></div>
+  <div class="party" id="party" hidden role="dialog" aria-label="Watch together"></div>
 </div>
 
 <script>
@@ -304,6 +334,27 @@ function showState(sh) {
   return next ? { m: next, mode: "next", at: p.at } : { m: last, mode: "done", at: p.at };
 }
 
+// ---- Sync Watch: where the party is, and what this player should do about it ----
+// st: the party's state from the box ({playing, pos, at}); now: the box's clock in ms (our
+// clock + offset); local: this player ({t, paused, ended}). Small drift is closed by playing
+// up to 10% faster or slower (browsers keep the pitch); more than a second, by jumping.
+const partyPos = (st, now) => st.pos + (st.playing ? Math.max(0, now - st.at) / 1000 : 0);
+function syncStep(st, now, local) {
+  const want = partyPos(st, now), diff = want - local.t;
+  if (!st.playing) return { pause: !local.paused, play: false, seek: Math.abs(diff) > 0.3 ? want : null, rate: 1 };
+  if (Math.abs(diff) > 1) return { pause: false, play: local.paused && !local.ended, seek: want, rate: 1 };
+  const rate = Math.abs(diff) < 0.08 ? 1 : 1 + Math.max(-0.1, Math.min(0.1, diff * 0.5));
+  return { pause: false, play: local.paused && !local.ended, seek: null, rate };
+}
+// Was this player event caused by us following the party (ignore it) or by the person (tell the party)?
+function ownEvent(kind, st, now, local) {
+  if (kind === "play") return st.playing;
+  if (kind === "pause") return !st.playing || local.ended;
+  return Math.abs(local.t - partyPos(st, now)) < 1.5;        // "seeking" (t is the target): our own correction
+}
+// The box's clock minus ours, from the round trip with the shortest time (the least skewed one).
+const clockOffset = samples => [...samples].sort((a, b) => a.rtt - b.rtt)[0].offset;
+
 // ---- library ----
 async function load() {
   try {
@@ -318,9 +369,15 @@ async function load() {
   folderById = new Map(lib.folders.map(f => [f.id, f]));
   buildShows();
   $("#dropLink").href = lib.drop_path;
+  await loadParties();
+  const saved = !restored && mem.get("party");
+  restored = true;
+  // a refresh in the middle of a watch party: back into it
+  if (saved && /^play=/.test(location.hash.slice(1)) && !party) { joinParty(saved.code); }
   route();
   posterQueue();
 }
+let restored = false;
 
 function posterBox(m, art, extra = "") {
   const sq = m.kind === "audio";
@@ -336,7 +393,7 @@ function card(m, opts = {}) {
   // in a folder's shelf the folder name is already the heading; elsewhere (Continue) say where it's from
   const where = opts.where ? (m.show ? epLong(m) : folderLabel(m.parent)) : "";
   const meta = !can ? "won't play on this device" : [opts.status || (started(p) ? `${clock(p.d - p.t)} left` : finished(p) ? "watched" : ""), where].filter(Boolean).join(" · ");
-  return `<a class="card${sq ? " sq" : ""}${can ? "" : " cant"}" href="#play=${m.id}" title="${esc(m.name)}">
+  return `<a class="card${sq ? " sq" : ""}${can ? "" : " cant"}" href="${esc(opts.href || "#play=" + m.id)}" title="${esc(m.name)}">
     <div class="poster" style="background:${gradient(artFor(m))}">
       <div class="ph">${sq ? NOTE : m.poster ? "" : FILM}</div>
       ${m.poster ? `<img src="api/posters/${m.id}" alt="" loading="lazy" onload="this.classList.add('on')">` : ""}
@@ -375,6 +432,10 @@ function renderHome() {
       .map(([sh, st]) => ({ at: st.at, html: card(st.m, { title: sh.name, where: true, status: st.mode === "next" ? "Next up" : "" }) })),
   ].sort((a, b) => b.at - a.at).slice(0, 12);
   let html = "";
+  // watch parties on this hotspot: tap one to join in, in step with everyone there
+  const live = partyList.filter(p => byId.has(p.item));
+  if (live.length) html += `<section class="shelf"><h2>Watching together<small>${live.length}</small></h2><div class="row">${live.map(p => card(byId.get(p.item), {
+    href: "#watch=" + p.code, where: true, title: byId.get(p.item).show ? shows.get(byId.get(p.item).show).name : undefined, status: `${p.avatar ? p.avatar + " " : ""}${p.host} · ${p.watching} watching${p.playing ? "" : " · paused"}` })).join("")}</div></section>`;
   if (cont.length) html += `<section class="shelf"><h2>Continue<small>${cont.length}</small></h2><div class="row">${cont.map(c => c.html).join("")}</div></section>`;
   if (shows.size) {
     const list = [...shows.values()].sort(nat);
@@ -444,7 +505,11 @@ function go(hash) { if (location.hash.slice(1) !== hash) location.hash = hash; e
 function route() {
   if (!lib) return;
   const h = location.hash.slice(1), m = /^(play|folder|show)=([0-9a-f]{16})(?:&s=(\d{1,3}))?$/.exec(h);
-  if (m && m[1] === "play") return byId.has(m[2]) ? openPlayer(byId.get(m[2])) : (closePlayer(), renderHome());
+  const w = /^watch=([A-Za-z]{4})$/.exec(h);
+  if (w) return joinParty(w[1].toUpperCase());
+  if (m && m[1] === "play" && byId.has(m[2])) return openPlayer(byId.get(m[2]));
+  if (party) leaveParty();              // out of the player: out of the party
+  if (m && m[1] === "play") return closePlayer(), renderHome();
   closePlayer();
   if (m && m[1] === "show") renderShow(m[2], m[3] != null ? +m[3] : null);
   else m ? renderFolder(m[2]) : renderHome();
@@ -471,12 +536,12 @@ function openPlayer(m) {
   const noSave = m.download ? "" : ' controlslist="nodownload" oncontextmenu="return false"';
   if (m.kind === "video") {
     stage.className = "stage";
-    stage.innerHTML = `<video id="media" controls autoplay playsinline preload="auto"${noSave}></video>`;
+    stage.innerHTML = `<video id="media" controls${party ? "" : " autoplay"} playsinline preload="auto"${noSave}></video>`;
   } else {
     stage.className = "audio";
     stage.innerHTML = `<div class="art" style="background:${gradient(m.parent ? folderLabel(m.parent) : m.name)}">${NOTE}</div>
       <h1>${esc(titleOf(m))}</h1><div class="sub">${esc(sh ? sh.name : folderLabel(m.parent) || "Drop")}${list.length > 1 ? ` · ${idx + 1} of ${list.length}` : ""}</div>
-      <audio id="media" controls autoplay preload="auto"${noSave}></audio>
+      <audio id="media" controls${party ? "" : " autoplay"} preload="auto"${noSave}></audio>
       ${list.length > 1 ? `<div class="tracks">${list.map((t, i) => `<button type="button" data-track="${t.id}" class="${t === m ? "now" : ""}"><span class="n">${t === m ? "▶" : i + 1}</span><span class="nm">${esc(titleOf(t))}</span><span class="d">${mem.get("d." + t.id) ? clock(mem.get("d." + t.id)) : ""}</span></button>`).join("")}</div>` : ""}`;
     stage.querySelectorAll("[data-track]").forEach(b => b.onclick = () => go("play=" + b.dataset.track));
   }
@@ -486,6 +551,7 @@ function openPlayer(m) {
   const p = pos(m.id);
   media.addEventListener("loadedmetadata", () => {
     mem.set("d." + m.id, media.duration);
+    if (party) return syncNow();           // in a watch party the party says where we are
     if (started(p)) {
       media.currentTime = p.t;
       toast(`Picked up at ${clock(p.t)}`, "Start over", () => { media.currentTime = 0; });
@@ -495,8 +561,12 @@ function openPlayer(m) {
   media.addEventListener("ended", () => { save(); upNext(list[idx + 1]); });
   media.addEventListener("play", () => { hideNext(); armIdle(); });
   media.addEventListener("error", () => toast("This file won't play here.", "Back", () => history.length > 1 ? history.back() : go("")));
+  // "seeking", not "seeked": the sync loop would pull a person's seek back before it finished
+  ["play", "pause", "seeking"].forEach(k => media.addEventListener(k, () => tellParty(k)));
+  if (party && party.st.item !== m.id) partyAct({ type: "item", item: m.id });   // next episode, a track, a card
+  renderParty();
   saveTimer = setInterval(save, 5000);
-  media.play?.().catch(() => {});   // autoplay can be refused (iOS with sound): the controls are there
+  if (!party) media.play?.().catch(() => {});   // autoplay can be refused (iOS with sound): the controls are there. In a party, syncNow plays
   if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({ title: titleOf(m), artist: sh ? sh.name : folderLabel(m.parent) || "AirplaneMode", album: "Cinema",
       artwork: m.poster ? [{ src: "api/posters/" + m.id, sizes: "480x270", type: "image/jpeg" }] : [] });
@@ -514,6 +584,7 @@ function closePlayer(keepView) {
   if (!keepView) { $("#player").hidden = true; $("#libView").hidden = false; document.title = "Cinema · AirplaneMode"; }
 }
 $("#back").onclick = () => {
+  if (party && party.st.seats.some(s => !s.you && !s.away) && !confirm("Leave the watch party? The others keep watching.")) return;
   if (current && current.show) return go(`show=${current.show}&s=${current.season}`);
   const fid = current && current.parent;
   go(fid ? "folder=" + fid : "");
@@ -558,6 +629,174 @@ document.addEventListener("keydown", e => {
   else if (k === "m") { media.muted = !media.muted; }
   else if (k === "Escape" && !document.fullscreenElement) { $("#back").click(); }
 });
+
+// ---- Sync Watch: watch parties (decisions in syncStep / ownEvent above) ----
+let party = null;          // {code, token, st, offset, gen}
+let partyList = [];        // open parties on this hotspot (the library's shelf)
+const PH = { "Content-Type": "application/json", "X-Cinema": "1" };
+const VERB = { play: "pressed play", pause: "paused", seek: "skipped", item: "put on something new" };
+const boxNow = () => Date.now() + (party ? party.offset : 0);
+
+async function measureClock() {
+  const samples = [];
+  for (let i = 0; i < 5; i++) {
+    const t0 = Date.now();
+    try {
+      const d = await (await fetch("api/watch/clock", { cache: "no-store" })).json();
+      const t1 = Date.now();
+      samples.push({ rtt: t1 - t0, offset: d.now - (t0 + t1) / 2 });
+    } catch {}
+  }
+  return samples.length ? clockOffset(samples) : 0;
+}
+async function partyCall(method, path, body, token = party && party.token, signal) {
+  const r = await fetch(path, { method, cache: "no-store", body: body ? JSON.stringify(body) : undefined, signal,
+                                headers: { ...PH, ...(token ? { "X-Seat": token } : {}) } });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(d.detail || "Something went wrong."); e.status = r.status; throw e; }
+  return d;
+}
+async function enterParty(code, token, st) {
+  const offset = await measureClock();
+  party = { code, token, st, offset, gen: Date.now(), ctl: new AbortController() };
+  mem.set("party", { code, token });
+  renderParty();
+  pollParty(party.gen);
+}
+async function startParty() {
+  if (!current || !media) return;
+  try {
+    const d = await partyCall("POST", "api/watch", { item: current.id, pos: media.currentTime || 0, playing: !media.paused }, null);
+    await enterParty(d.code, d.token, d.state);
+    openPanel();
+  } catch (e) { note(e.message); }
+}
+async function joinParty(code) {
+  if (party && party.code === code) return followItem(party.st) || syncNow();
+  if (party) leaveParty();
+  const saved = mem.get("party");
+  try {
+    const d = await partyCall("POST", `api/watch/${code}/join`, { token: saved && saved.code === code ? saved.token : null }, null);
+    await enterParty(code, d.token, d.state);
+    followItem(d.state, true);
+  } catch (e) {
+    mem.set("party", null);
+    note(e.status === 404 ? "That watch party has ended." : e.message);
+    if (location.hash.startsWith("#watch=")) go("");
+  }
+}
+function leaveParty() {
+  if (!party) return;
+  const p = party;
+  party = null;
+  mem.set("party", null);
+  p.ctl.abort();                        // the long-poll in flight
+  fetch(`api/watch/${p.code}/leave`, { method: "POST", headers: { ...PH, "X-Seat": p.token }, keepalive: true }).catch(() => {});
+  if (media) media.playbackRate = 1;
+  renderParty();
+}
+async function pollParty(gen) {
+  while (party && party.gen === gen) {
+    try {
+      const st = await partyCall("GET", `api/watch/${party.code}/state?since=${party.st.version}`, null, party.token, party.ctl.signal);
+      if (party && party.gen === gen) applyParty(st);
+    } catch (e) {
+      if (!party || party.gen !== gen) return;
+      if (e.status === 404 || e.status === 403) { leaveParty(); note("The watch party has ended."); return; }
+      await new Promise(r => setTimeout(r, 2000));          // the box is busy or we're offline: try again
+    }
+  }
+}
+function applyParty(st) {
+  const prev = party.st;
+  if (st.version < prev.version) return;
+  party.st = st;
+  const me = st.seats.find(s => s.you);
+  if (st.last && st.at !== prev.at && (!me || st.last.by !== me.name)) note(`${st.last.by} ${VERB[st.last.type] || ""}`);
+  renderParty();
+  followItem(st) || syncNow();
+}
+// The party is on another file: go there (fetching the library first if it's new on Drop).
+function followItem(st, replace) {
+  if (current && current.id === st.item && !$("#player").hidden) return false;
+  const open = () => { if (!byId.has(st.item)) return; replace ? location.replace("#play=" + st.item) : go("play=" + st.item); };
+  if (byId.has(st.item)) open(); else load().then(open);
+  return true;
+}
+function partyAct(body) {
+  const p = party;
+  // assume it worked, so the player events this causes aren't sent back as new actions
+  if (body.type === "item") p.st = { ...p.st, item: body.item, pos: 0, playing: true, at: boxNow() };
+  else p.st = { ...p.st, playing: body.type === "seek" ? p.st.playing : body.type === "play", pos: body.pos, at: boxNow() };
+  partyCall("POST", `api/watch/${p.code}/act`, body).then(st => { if (party === p) applyParty(st); }).catch(e => note(e.message));
+}
+function tellParty(kind) {
+  if (!party || !media || !current || current.id !== party.st.item) return;
+  const local = { t: media.currentTime, paused: media.paused, ended: media.ended };
+  if (ownEvent(kind, party.st, boxNow(), local)) return;
+  partyAct({ type: kind === "seeking" ? "seek" : kind, pos: media.currentTime });
+}
+function syncNow() {
+  if (!party || !media || !current || current.id !== party.st.item || media.readyState < 1) return;
+  if (media.ended && party.st.playing) return;          // finished here: up next (or the others) will move us on
+  const s = syncStep(party.st, boxNow(), { t: media.currentTime, paused: media.paused, ended: media.ended });
+  if (s.seek != null) media.currentTime = isFinite(media.duration) ? Math.min(s.seek, media.duration) : s.seek;
+  if (s.pause && !media.paused) media.pause();
+  if (s.play) media.play().catch(() => { if (!$("#player .toast")) toast("Tap to join in", "Play", () => media && media.play().catch(() => {})); });
+  if (Math.abs(media.playbackRate - s.rate) > 0.004) media.playbackRate = s.rate;
+}
+setInterval(syncNow, 500);
+
+function renderParty() {
+  const b = $("#together");
+  b.classList.toggle("on", !!party);
+  const here = party ? party.st.seats.filter(s => !s.away).length : 0;
+  $("#togetherLbl").textContent = party ? `${here} watching` : "Watch together";
+  b.setAttribute("aria-label", party ? `Watch party ${party.code}: ${here} watching` : "Watch together");
+  if (!$("#party").hidden) fillPanel();
+}
+function fillPanel() {
+  const box = $("#party");
+  if (!party) {
+    box.innerHTML = `<h3>Watch together</h3>
+      <p>Start a watch party and everyone on this hotspot can join from Cinema's library. Your phones play in step, each with its own sound, so earbuds on.</p>
+      <p>Anyone in the party can pause, skip or start the next episode for everyone.</p>
+      <div class="acts"><button class="ghost" type="button" data-close>Cancel</button><button class="go" type="button" data-start>Start the party</button></div>`;
+    return;
+  }
+  const st = party.st, me = st.seats.find(s => s.you);
+  box.innerHTML = `<h3>Watching together <span class="code">${esc(st.code)}</span></h3>
+    <p>Everyone here plays, pauses and skips for everyone. Each phone has its own sound: earbuds on.</p>
+    <ul>${st.seats.map(s => `<li class="${s.away ? "away" : ""}"><span class="av">${esc(s.avatar || s.name.slice(0, 1).toUpperCase())}</span><span>${esc(s.name)}${s.you ? " <small>(you)</small>" : ""}${s.away ? " <small>· away</small>" : ""}</span></li>`).join("")}</ul>
+    ${me && !me.avatar ? `<p>Others see you as “${esc(me.name)}”. Pick your own name and picture on the <a href="../">AirplaneMode menu</a>.</p>` : ""}
+    <div class="acts"><button class="ghost" type="button" data-leave>Leave the party</button><button class="go" type="button" data-close>Done</button></div>`;
+}
+function openPanel() { $("#party").hidden = false; $("#together").setAttribute("aria-expanded", "true"); fillPanel(); }
+function closePanel() { $("#party").hidden = true; $("#together").setAttribute("aria-expanded", "false"); }
+$("#together").onclick = () => $("#party").hidden ? openPanel() : closePanel();
+$("#party").addEventListener("click", e => {
+  if (e.target.closest("[data-start]")) startParty();
+  else if (e.target.closest("[data-leave]")) { leaveParty(); closePanel(); }
+  else if (e.target.closest("[data-close]")) closePanel();
+});
+document.querySelector(".pbar a.am-home").addEventListener("click", () => leaveParty());
+function note(text) {
+  document.querySelector(".toast.fixed")?.remove();
+  const t = document.createElement("div");
+  t.className = "toast fixed";
+  t.innerHTML = `<span>${esc(text)}</span>`;
+  document.body.append(t);
+  setTimeout(() => t.remove(), 3500);
+}
+async function loadParties() {
+  try {
+    const d = await (await fetch("api/watch", { cache: "no-store" })).json();
+    const changed = JSON.stringify(d.parties) !== JSON.stringify(partyList);
+    partyList = d.parties || [];
+    if (changed && lib && !location.hash.slice(1) && $("#player").hidden) renderHome();
+  } catch {}
+}
+setInterval(() => { if ($("#player").hidden) loadParties(); }, 8000);
 
 // ---- posters: the first browser to see a video grabs a frame and gives it to the box ----
 let postering = false;

@@ -27,15 +27,17 @@ re-check them if the code has moved.
 | [posters.md](posters.md) | Client-side frame grabbing (canvas, cover-crop, crossOrigin), the queue, server checks |
 | [storage-keys.md](storage-keys.md) | Every `localStorage` key and in-memory structure the page keeps |
 | [testing-and-release.md](testing-and-release.md) | `tests/test_cinema.py`, how `tests/test_series.mjs` slices the page's code, CI, Docker, releasing |
+| [sync-watch.md](sync-watch.md) | Watch parties: the `Party` room (amrooms), its routes, and how each phone follows (`syncStep`, `ownEvent`, clock offset) |
 | [gotchas-and-extending.md](gotchas-and-extending.md) | Known traps, edge cases, and recipes for common changes (such as adding a new file-name pattern) |
 
 ## Ten-second orientation
 
-- Backend: `app.py`. Three routes: `GET /api/library`, `GET|PUT /api/posters/{id}`, and `GET /`
-  for the page.
+- Backend: `app.py`. `GET /api/library`, `GET|PUT /api/posters/{id}`, the watch-party routes
+  under `/api/watch` (see [sync-watch.md](sync-watch.md)), and `GET /` for the page.
 - Frontend: `static/index.html`. Its sections are marked by comments: helpers and memory
-  (`:191`), TV series (`:227`), `// ---- library ----` (`:307`), routing (`:442`), player (`:457`),
-  posters (`:562`).
+  (`:221`), TV series (`:257`), Sync Watch decisions (`:337`), `// ---- library ----` (`:358`),
+  routing (`:503`), player (`:522`), Sync Watch parties (`:633`), posters (`:801`). (These
+  section lines are as of 0.2.0; the other files' line references are as of 0.1.2.)
 - Tests: `python tests/test_cinema.py` (API) and `node tests/test_series.mjs` (series logic,
   executed from the page's own source).
 - Rules that must not break: never proxy media; use only relative URLs in the page; treat

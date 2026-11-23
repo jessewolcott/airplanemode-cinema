@@ -27,11 +27,17 @@ Setup:
 | `test_drop_down` | `fetch_drop` raises → 503 with "Drop" in `detail` |
 | `test_posters` | GET before upload → 404; PUT without the header → 403; SVG body → 415; JPEG over `MAX_POSTER` → 413; poster for the PDF id → 404; `..%2f..%2fx` → 404; a valid JPEG → 200; GET returns the same bytes, `image/jpeg`, `nosniff`; the library now says `poster: True`; the posters dir holds exactly `<FILM>.img` |
 | `test_posters_for_deleted_files_go` | after Drop stops listing FILM, a library call deletes its poster |
+| `test_watch_party_start_join_and_control` | header, media-only items, `pos` checks; start paused at 30; listed; join (and the same seat back by token); play runs the position on; pause without `pos` stops where it is; seek keeps play/pause; `item` resets to 0 and the same item twice changes nothing; bad item 404, bad type 400, no seat 403; leaving, the last one out ends it (404) |
+| `test_watch_long_poll_wakes_on_a_change` | a poll with nothing new waits `CINEMA_POLL_WAIT` (0.3 s in tests); a poll in a thread returns at once when someone pauses; `api/watch/clock` is close to the test's clock |
+| `test_watch_party_nobody_polls_ends` | a seat not seen for 2 min isn't counted as watching; the party stays while one person polls; nobody for `GONE_AFTER` → swept |
+| `test_watch_names_come_from_whos_who` | fake `whois`: the seat and the listed party carry "Sam" and 🦊; Sam's other browser gets the same token; someone without a name is "Traveller" |
+
+Tests set `ADMIN_URL=""` (no who's who calls) and `CINEMA_POLL_WAIT=0.3` before importing the app.
 
 ## Series tests: `tests/test_series.mjs` (runs the page's own code)
 
 Run with `node tests/test_series.mjs`. It needs only Node built-ins (`node:fs`, `node:assert/strict`),
-with no npm install. Output: `ok  <name>` for each test and `5 passed`.
+with no npm install. Output: `ok  <name>` for each test and `9 passed`.
 
 **How it works** (`:7-19`):
 
@@ -43,7 +49,8 @@ with no npm install. Output: `ok  <name>` for each test and `5 passed`.
    - `globalThis.document.createElement()` returns an object whose `canPlayType` gives
      `"probably"` (so `playable()` is true).
 4. It wraps the slice in `new Function(slice + "return { parseEp, seasonOf, buildShows,
-   showState, epLong, epShort, titleOf, savePos, setLib, shows }")()`. `setLib(l)` assigns the
+   showState, epLong, epShort, titleOf, savePos, partyPos, syncStep, ownEvent, clockOffset,
+   setLib, shows }")()`. `setLib(l)` assigns the
    slice's own `let lib, byId, folderById` closure variables, which is why those must stay `let`
    and stay inside the slice. `shows()` returns the current `shows` map (it's reassigned by
    `buildShows`).
@@ -68,6 +75,14 @@ The tests:
    seasons 1/2 by folder order; a one-season show → "E2"; a film keeps `tidy` ("Whale Song").
 5. **what to watch next in a show**: `showState` goes start → continue (300/1500) → next (1499/1500
    is finished) → next into season 2 after finishing S1 → done.
+
+6. **party position runs on while playing, stands still while paused** (`partyPos`, never
+   backwards).
+7. **following the party**: `syncStep` in step / behind (rate > 1, ≤ 1.1) / ahead (rate < 1,
+   ≥ 0.9) / far off (seek); play/pause mirrored; a finished file isn't restarted.
+8. **only the person's own actions go to the party**: `ownEvent` for play, pause (and pause at
+   the end of the file), and `seeking` near vs far from the party's position.
+9. **clock offset comes from the quickest round trip** (`clockOffset`).
 
 Tests 3-5 share state: `buildShows` mutates the fixture objects, and `savePos` fills the stubbed
 storage in order.

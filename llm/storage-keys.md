@@ -26,6 +26,7 @@ still works.
 | `cinema.p.<id>` | `{t: seconds, d: duration, at: epoch ms}` | `savePos`, from the player's `save()`: every 5 s, on pause/ended/pagehide/hidden/close | `started`/`finished`, cards, Continue shelf, `showState` (the most recent `at` = last watched), resume on open |
 | `cinema.d.<id>` | duration in seconds (number) | `loadedmetadata` in the player; `grab()` in the poster queue | duration badges on cards, episode rows, the audio track list |
 | `cinema.nop.<id>` | `1` | the poster queue, when `grab` fails | the poster queue (skip forever on this device) |
+| `cinema.party` | `{code, token}` or `null` | `enterParty` (Sync Watch); cleared by `leaveParty` and a failed join | `load()` rejoins after a refresh in the player; `joinParty` reuses the token for the same code |
 
 `<id>` is Drop's 16-hex item id. If Drop deletes a file and it's uploaded again, it gets a new id,
 so positions don't carry over. Nothing ever prunes old keys. They're tiny.

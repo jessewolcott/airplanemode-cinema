@@ -12,9 +12,26 @@ API (relative to the app's root; the platform serves it at /cinema/):
 
 Where you are in each film lives in the browser (per device), so every tablet on the plane
 keeps its own place. Nothing needs an account.
+
+Sync Watch (watch parties): several phones play the same file in step, each on its own
+earbuds, each streaming from Drop itself. A party is an amrooms room (the platform's Rooms
+SDK) holding the file, playing or paused, and the position at a moment on the box's clock.
+Anyone in the party can play, pause, seek or change the file; every phone long-polls and
+steers its own player to match (pages: `syncStep`).
+  GET  api/watch                       open parties on this hotspot
+  GET  api/watch/clock                 {now}: the box's clock in ms, for the page's offset
+  POST api/watch {item, pos, playing}  start one -> {code, token, state}
+  POST api/watch/{code}/join {token?}  a seat (or yours back) -> {token, state}
+  GET  api/watch/{code}/state?since=N  long-poll (seat token in "X-Seat")
+  POST api/watch/{code}/act {type: play|pause|seek|item, pos?, item?}
+  POST api/watch/{code}/leave
+POSTs need "X-Cinema: 1". Names and emoji come from who's who (the AirplaneMode menu).
 """
+import asyncio
+import contextlib
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -22,6 +39,7 @@ import urllib.request
 from pathlib import Path
 
 import anyio
+from amrooms import Room, RoomError, Rooms, whois
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -39,7 +57,79 @@ MEDIA_RE = re.compile(r"^(video|audio)/[A-Za-z0-9.+-]+$")
 MAX_POSTER = 300 * 1024
 MAX_POSTERS = 5000
 
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+
+class Party(Room):
+    """A watch party. No bots, no game: people join and leave at any time."""
+    max_seats = 30
+    away_after = 60.0
+    poll_wait = float(os.getenv("CINEMA_POLL_WAIT", "20"))
+
+    def __init__(self, code, seed=None, item=None, pos=0.0, playing=True):
+        super().__init__(code, seed)
+        self.item, self.playing_now = item, bool(playing)
+        self.pos, self.at = max(0.0, float(pos)), now_ms()
+        self.last = None                      # {"by": name, "type": ...} for "Sam paused"
+
+    def empty(self):
+        """Nobody seen for 10 minutes. People who close the page without pressing Leave stay
+        seated (as away) until then, so a phone that locked mid-film can come straight back."""
+        now = time.monotonic()
+        return not any(s.human and not s.left and now - s.seen < GONE_AFTER for s in self.seats)
+
+    def position(self, at=None):
+        """Seconds into the file at `at` (ms on the box's clock)."""
+        at = now_ms() if at is None else at
+        return self.pos + ((at - self.at) / 1000 if self.playing_now else 0.0)
+
+    def apply(self, i, kind, pos=None, item=None):
+        if kind == "item":
+            if item == self.item:
+                return                          # several phones' "up next" fire at once: once is enough
+            self.item, self.pos, self.playing_now = item, 0.0, True
+        elif kind in ("play", "pause", "seek"):
+            self.pos = self.position() if pos is None else pos
+            if kind != "seek":
+                self.playing_now = kind == "play"
+        else:
+            raise RoomError(400, "Unknown action.")
+        self.at = now_ms()
+        self.last = {"by": self.seats[i].name, "type": kind}
+        self.changed()
+
+    def view(self, token):
+        me = self.seat_of(token)
+        now = time.monotonic()
+        return {"code": self.code, "version": self.version, "item": self.item, "playing": self.playing_now,
+                "pos": self.pos, "at": self.at, "now": now_ms(), "you": me, "last": self.last,
+                "seats": [self.seat_info(i, me, now) for i in range(len(self.seats))
+                          if not self.seats[i].left]}
+
+    def summary(self):
+        here = [s for i, s in enumerate(self.seats) if not self.away(i)]
+        return {"code": self.code, "item": self.item, "playing": self.playing_now,
+                "host": self.host.name if self.host else "?", "avatar": self.host.avatar if self.host else None,
+                "watching": len(here)}
+
+
+def now_ms():
+    return time.time() * 1000
+
+
+GONE_AFTER = 600.0       # seconds: a party nobody has polled for this long is over
+
+
+parties = Rooms(Party, max_rooms=50, idle=6 * 3600, empty_grace=30)
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_app):
+    task = asyncio.create_task(parties.sweep_forever())
+    yield
+    task.cancel()
+
+
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
 
 def _fetch_drop():
@@ -117,10 +207,7 @@ async def put_poster(iid: str, request: Request):
     if request.headers.get("x-cinema") != "1":
         raise HTTPException(403, "Missing request header.")
     p = poster_path(iid)
-    if time.time() - _known["at"] > 60:     # only for files Drop actually has
-        _known["ids"] = {m["id"] for m in (await library_from_drop())[1]}
-        _known["at"] = time.time()
-    if iid not in _known["ids"]:
+    if not await drop_has(iid):             # only for files Drop actually has
         raise HTTPException(404, "Drop has no such file.")
     body = b""
     async for chunk in request.stream():
@@ -138,6 +225,117 @@ async def put_poster(iid: str, request: Request):
     tmp.write_bytes(body)
     tmp.replace(p)
     return {"ok": True}
+
+
+async def drop_has(iid):
+    """Whether Drop has this media file (its list is re-read at most once a minute, or on a miss
+    after 5 s, so a file added a moment ago is found)."""
+    if not ID_RE.match(str(iid or "")):
+        return False
+    age = time.time() - _known["at"]
+    if age > 60 or (iid not in _known["ids"] and age > 5):
+        _known["ids"] = {m["id"] for m in (await library_from_drop())[1]}
+        _known["at"] = time.time()
+    return iid in _known["ids"]
+
+
+# ---------------- Sync Watch ----------------
+def need_header(request: Request):
+    if request.headers.get("x-cinema") != "1":
+        raise HTTPException(403, "Missing request header.")
+
+
+async def body(request: Request):
+    need_header(request)
+    try:
+        data = await request.json()
+    except ValueError:
+        raise HTTPException(400, "Send JSON.")
+    if not isinstance(data, dict):
+        raise HTTPException(400, "Send a JSON object.")
+    return data
+
+
+def seconds(v):
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not 0 <= v < 7 * 86400:
+        raise HTTPException(400, "Position must be a number of seconds.")
+    return float(v)
+
+
+@app.get("/api/watch")
+async def open_parties():
+    return {"parties": [p.summary() for p in parties.open_lobbies(20)]}
+
+
+@app.get("/api/watch/clock")
+async def clock():
+    return {"now": now_ms()}
+
+
+@app.post("/api/watch")
+async def start_party(request: Request):
+    data = await body(request)
+    item = data.get("item")
+    pos = seconds(data.get("pos", 0))
+    who = await whois(request)
+    if not await drop_has(item):
+        raise HTTPException(404, "Drop has no such file.")
+    room = parties.create(item=item, pos=pos, playing=data.get("playing", True) is not False)
+    token = room.join(None, who=who)
+    return {"code": room.code, "token": token, "state": room.view(token)}
+
+
+@app.post("/api/watch/{code}/join")
+async def join_party(code: str, request: Request):
+    data = await body(request)
+    who = await whois(request)
+    room = parties.get(code)
+    token = room.join(None, data.get("token") or request.headers.get("x-seat"), who=who)
+    return {"token": token, "state": room.view(token)}
+
+
+@app.get("/api/watch/{code}/state")
+async def party_state(code: str, request: Request, since: int = -1):
+    room = parties.get(code)
+    token = request.headers.get("x-seat", "")
+    room.need_seat(token)
+    room.seen(token)
+    await room.wait(since)
+    if room.closed or room.seat_of(token) is None:
+        raise HTTPException(404, "This watch party has ended.")
+    room.seen(token)
+    return room.view(token)
+
+
+@app.post("/api/watch/{code}/act")
+async def party_act(code: str, request: Request):
+    data = await body(request)
+    room = parties.get(code)
+    token = request.headers.get("x-seat", "")
+    i = room.need_seat(token)
+    room.seen(token)
+    kind = data.get("type")
+    item = data.get("item")
+    if kind == "item" and not await drop_has(item):
+        raise HTTPException(404, "Drop has no such file.")
+    pos = seconds(data["pos"]) if data.get("pos") is not None else None
+    async with room.lock:
+        room.apply(i, kind, pos=pos, item=item)
+    return room.view(token)
+
+
+@app.post("/api/watch/{code}/leave")
+async def leave_party(code: str, request: Request):
+    need_header(request)
+    room = parties.get(code)
+    room.leave(request.headers.get("x-seat", ""))
+    parties.sweep()                     # the last one out: the party ends
+    return {"ok": True}
+
+
+@app.exception_handler(RoomError)
+async def room_error(_req, exc):
+    return JSONResponse({"detail": exc.message}, status_code=exc.status)
 
 
 @app.exception_handler(HTTPException)

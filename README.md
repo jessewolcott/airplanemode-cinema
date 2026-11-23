@@ -29,6 +29,10 @@ tablet and laptop on the hotspot, with no internet.
   albums just keep playing. Lock-screen controls (Media Session) on phones.
 - **Opens from Drop.** Drop shows *Play in Cinema* on any video or audio file this device can
   play (the platform's `apps.json` declares that Cinema opens `video/*` and `audio/*`).
+- **Watch together (Sync Watch).** Tap *Watch together* in the player and everyone on the
+  hotspot can join from the library's *Watching together* shelf. Every phone plays in step,
+  each with its own sound (earbuds on), and anyone can pause, skip or start the next episode
+  for everyone. Names and pictures come from the AirplaneMode menu.
 - **Respects Drop's "downloads off".** The admin can turn downloads off for a file or folder in
   Drop; Cinema still plays it, and hides the browser's download option.
 
@@ -84,6 +88,8 @@ can't be grabbed; everything else works. In the platform's dev stack they share 
 |---|---|---|
 | `DROP_URL` | `http://drop:8000` | Drop's API, as this container reaches it |
 | `DROP_PATH` | `../drop/` | where the browser streams from (relative to `/cinema/`) |
+| `ADMIN_URL` | `http://admin:8000` | the admin service, for who's who names in watch parties (empty: off) |
+| `CINEMA_POLL_WAIT` | `20` | seconds a watch party's long-poll waits for a change |
 
 ## API
 
@@ -92,5 +98,14 @@ can't be grabbed; everything else works. In the platform's dev stack they share 
 | `GET api/library` | Drop's folders and the video/audio files in them, plus `drop_path` |
 | `GET api/posters/{id}` | a poster (JPEG/WebP) |
 | `PUT api/posters/{id}` | store one; needs `X-Cinema: 1`, max 300 KB, only for files Drop has |
+| `GET api/watch` | open watch parties on this hotspot |
+| `GET api/watch/clock` | the box's clock (ms), for each phone's clock offset |
+| `POST api/watch` | start a party `{item, pos, playing}` → `{code, token, state}` |
+| `POST api/watch/{code}/join` | a seat (or yours back) `{token?}` → `{token, state}` |
+| `GET api/watch/{code}/state?since=N` | long-poll; seat token in `X-Seat` |
+| `POST api/watch/{code}/act` | `{type: play\|pause\|seek\|item, pos?, item?}` |
+| `POST api/watch/{code}/leave` | leave (the last one out ends the party) |
 
-*Not yet tested on real hardware.* Subtitles (`.vtt` next to a video) are a planned addition.
+How the phones stay in step: [llm/sync-watch.md](llm/sync-watch.md).
+
+*Not yet tested on real hardware* (watch parties were tried with two browsers on one laptop). Subtitles (`.vtt` next to a video) are a planned addition.

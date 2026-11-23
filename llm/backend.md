@@ -1,7 +1,10 @@
 # Backend: `app.py`
 
 A single FastAPI module with no database. `docs_url`, `redoc_url` and `openapi_url` are all
-`None` (`app.py:42`), so there's no `/docs` page.
+`None`, so there's no `/docs` page. Since 0.2.0 it also holds the watch parties (`Party`,
+`parties`, the `/api/watch` routes, a lifespan sweeper, `drop_has()`): see
+[sync-watch.md](sync-watch.md). `put_poster` now checks the file with `drop_has()`. Line
+references below are as of 0.1.2.
 
 ## Configuration (`app.py:31-40`)
 

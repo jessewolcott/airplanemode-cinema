@@ -17,3 +17,5 @@ opens:                # Drop offers "Play in Cinema" for these types (via the pl
 env:
   DROP_URL: Drop's API inside the stack (default http://drop:8000).
   DROP_PATH: Where the browser streams from (default ../drop/, i.e. /drop/ on the box).
+  ADMIN_URL: The admin service, for who's who names in watch parties (default http://admin:8000; empty turns it off).
+  CINEMA_POLL_WAIT: Seconds a watch party's long-poll waits for a change (default 20).
