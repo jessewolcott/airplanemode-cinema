@@ -130,9 +130,9 @@ A test failure stops the job before any image is built.
 
 1. Make sure CI is green on `main`.
 2. **Ask Jesse first**, then push a tag `vX.Y.Z`. That publishes
-   `ghcr.io/jessewolcott/airplanemode-cinema:X.Y.Z`. Released so far: `0.1.0`, `0.1.1` (TV series), `0.1.2` (home button).
+   `ghcr.io/jessewolcott/airplanemode-cinema:X.Y.Z`. Released so far: `0.1.0`, `0.1.1` (TV series), `0.1.2` (home button), `0.2.0` (Sync Watch).
 3. In the platform repo (`../airplanemode`), bump the pinned tag in `compose.yaml`
-   (`image: ghcr.io/jessewolcott/airplanemode-cinema:0.1.2`; never `latest`). The platform CI also
+   (`image: ghcr.io/jessewolcott/airplanemode-cinema:0.2.0`; never `latest`). The platform CI also
    checks that the `Caddyfile` route (`handle_path /cinema/*`) and the `portal/apps.json` entry
    (including `opens`) exist.
 4. If the manifest changes (description, `opens`, env), keep `app.yaml` and the platform's

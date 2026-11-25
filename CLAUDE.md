@@ -48,4 +48,4 @@ repo): same origin, so posters work and Drop's "Play in Cinema" appears.
 ## Releasing
 
 Push a `vX.Y.Z` tag. CI tests, then publishes `ghcr.io/jessewolcott/airplanemode-cinema:X.Y.Z`
-(arm64 + amd64). **Ask Jesse before pushing a release tag.** Released: 0.1.0, 0.1.1 (TV series), 0.1.2 (home button).
+(arm64 + amd64). **Ask Jesse before pushing a release tag.** Released: 0.1.0, 0.1.1 (TV series), 0.1.2 (home button), 0.2.0 (Sync Watch).
